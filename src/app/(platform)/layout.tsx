@@ -1,5 +1,7 @@
+import { inspect } from "node:util";
 import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
+import { createAdminClient } from "@/utils/supabase/admin";
 import { Sidebar } from "@/components/sidebar";
 import type { Profile } from "@/lib/types";
 
@@ -12,46 +14,44 @@ export default async function PlatformLayout({
 }) {
   const supabase = await createClient();
 
-  // getUser() validates the JWT against GoTrue and refreshes it in-memory
-  // if needed. We need this (not getSession) so subsequent .from() calls
-  // use a fresh access token — otherwise an expired token gets sent to
-  // PostgREST, the request falls back to `anon`, and RLS hides the
-  // profile row.
   const {
     data: { user },
     error: userError,
   } = await supabase.auth.getUser();
 
   if (userError) {
-    console.error("[platform layout] getUser failed:", {
-      message: userError.message,
-      status: userError.status,
-    });
+    console.error(
+      "[platform layout] getUser failed:",
+      inspect(userError, { showHidden: true, depth: 4, getters: true }),
+    );
     redirect("/login");
   }
   if (!user) redirect("/login");
 
-  const { data: profile, error: profileError } = await supabase
+  // Use service-role client for the profile lookup. We've already
+  // validated the user via getUser() above, so reading their own
+  // profile by the verified user.id with elevated privileges is safe
+  // and avoids any RLS / JWT-propagation flakiness on the user-scoped
+  // client right after sign-in.
+  const admin = createAdminClient();
+  const { data: profile, error: profileError } = await admin
     .from("profiles")
     .select("*")
     .eq("id", user.id)
     .maybeSingle<Profile>();
 
   if (profileError) {
-    console.error("[platform layout] profile lookup failed:", {
-      code: profileError.code,
-      message: profileError.message,
-      details: profileError.details,
-      hint: profileError.hint,
-      userId: user.id,
-    });
+    console.error(
+      "[platform layout] profile lookup failed:",
+      inspect(profileError, { showHidden: true, depth: 4, getters: true }),
+    );
     redirect("/login");
   }
   if (!profile) {
     console.error(
-      "[platform layout] no profile row visible for user",
+      "[platform layout] no profile row exists for user",
       user.id,
-      "— RLS may be blocking or trigger didn't fire",
+      "— the handle_new_user trigger may not have fired",
     );
     redirect("/login");
   }

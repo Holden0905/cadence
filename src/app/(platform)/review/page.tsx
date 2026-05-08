@@ -1,5 +1,7 @@
+import { inspect } from "node:util";
 import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
+import { createAdminClient } from "@/utils/supabase/admin";
 import { ReviewList } from "@/components/review-list";
 import { formatWeekRange } from "@/lib/dates";
 import type {
@@ -22,19 +24,17 @@ export default async function ReviewPage() {
     error: userError,
   } = await supabase.auth.getUser();
   if (userError || !user) redirect("/login");
-  const { data: profile, error: profileError } = await supabase
+  const admin = createAdminClient();
+  const { data: profile, error: profileError } = await admin
     .from("profiles")
     .select("*")
     .eq("id", user.id)
     .maybeSingle<Profile>();
   if (profileError) {
-    console.error("[review page] profile lookup failed:", {
-      code: profileError.code,
-      message: profileError.message,
-      details: profileError.details,
-      hint: profileError.hint,
-      userId: user.id,
-    });
+    console.error(
+      "[review page] profile lookup failed:",
+      inspect(profileError, { showHidden: true, depth: 4, getters: true }),
+    );
     redirect("/login");
   }
   if (!profile || profile.role !== "admin") redirect("/dashboard");

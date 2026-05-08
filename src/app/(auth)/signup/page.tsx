@@ -3,8 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
-import { createClient } from "@/utils/supabase/client";
+import { signUpAction } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,7 +17,6 @@ import {
 import { Loader2 } from "lucide-react";
 
 export default function SignupPage() {
-  const router = useRouter();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -37,34 +35,22 @@ export default function SignupPage() {
 
     setSubmitting(true);
 
-    const supabase = createClient();
-    const origin =
-      process.env.NEXT_PUBLIC_APP_URL ?? window.location.origin;
+    const result = await signUpAction(fullName, email, password);
 
-    const { data, error: signupError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: `${origin}/auth/callback`,
-        data: { full_name: fullName },
-      },
-    });
-
-    setSubmitting(false);
-
-    if (signupError) {
-      setError(signupError.message);
+    if (result && "error" in result) {
+      setError(result.error);
+      setSubmitting(false);
       return;
     }
 
-    // If session is returned, email confirmation is disabled — go straight to dashboard
-    if (data.session) {
-      router.push("/dashboard");
-      router.refresh();
+    if (result && "needsConfirmation" in result && result.needsConfirmation) {
+      setSubmitting(false);
+      setConfirmationSent(true);
       return;
     }
 
-    setConfirmationSent(true);
+    // If session was returned, the server action redirects to /dashboard;
+    // submitting stays true while the navigation completes.
   };
 
   if (confirmationSent) {

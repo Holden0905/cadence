@@ -18,14 +18,18 @@ export default async function ReviewPage() {
   const supabase = await createClient();
 
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-  const { data: profile } = await supabase
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) redirect("/login");
+  const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .select("*")
-    .eq("id", user.id)
+    .eq("id", session.user.id)
     .single<Profile>();
+  if (profileError) {
+    console.error("[review page] profile lookup failed:", profileError);
+    redirect("/login");
+  }
   if (!profile || profile.role !== "admin") redirect("/dashboard");
 
   const { data: cycle } = await supabase

@@ -33,6 +33,9 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# Windows ADS / Zone.Identifier files (created by WSL when copying from Windows)
+*:Zone.Identifier
+
 # vercel
 .vercel
 

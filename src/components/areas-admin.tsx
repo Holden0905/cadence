@@ -26,7 +26,13 @@ import { Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { Area } from "@/lib/types";
 
-export function AreasAdmin({ areas }: { areas: Area[] }) {
+export function AreasAdmin({
+  areas,
+  siteId,
+}: {
+  areas: Area[];
+  siteId: string;
+}) {
   const router = useRouter();
   const [editing, setEditing] = useState<Area | null>(null);
   const [creating, setCreating] = useState(false);
@@ -68,6 +74,7 @@ export function AreasAdmin({ areas }: { areas: Area[] }) {
       const { error } = await supabase.from("areas").insert({
         name: draft.name,
         sort_order: draft.sort_order,
+        site_id: siteId,
       });
       if (error) toast.error(error.message);
       else {

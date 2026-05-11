@@ -1,9 +1,7 @@
-import { inspect } from "node:util";
-import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
-import { createAdminClient } from "@/utils/supabase/admin";
 import { ReviewList } from "@/components/review-list";
 import { formatWeekRange } from "@/lib/dates";
+import { requireSiteAdmin } from "@/lib/admin-guard";
 import type {
   Area,
   AreaRequirement,
@@ -17,31 +15,13 @@ import type {
 export const dynamic = "force-dynamic";
 
 export default async function ReviewPage() {
+  const { siteId } = await requireSiteAdmin();
   const supabase = await createClient();
-
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-  if (userError || !user) redirect("/login");
-  const admin = createAdminClient();
-  const { data: profile, error: profileError } = await admin
-    .from("profiles")
-    .select("*")
-    .eq("id", user.id)
-    .maybeSingle<Profile>();
-  if (profileError) {
-    console.error(
-      "[review page] profile lookup failed:",
-      inspect(profileError, { showHidden: true, depth: 4, getters: true }),
-    );
-    redirect("/login");
-  }
-  if (!profile || profile.role !== "admin") redirect("/dashboard");
 
   const { data: cycle } = await supabase
     .from("inspection_cycles")
     .select("*")
+    .eq("site_id", siteId)
     .order("week_start", { ascending: false })
     .limit(1)
     .maybeSingle<InspectionCycle>();
@@ -50,7 +30,7 @@ export default async function ReviewPage() {
     return (
       <div className="px-8 py-10">
         <h1 className="text-2xl font-semibold mb-2">Review</h1>
-        <p className="text-muted-foreground">No active cycle.</p>
+        <p className="text-muted-foreground">No active cycle for this site.</p>
       </div>
     );
   }
@@ -79,8 +59,8 @@ export default async function ReviewPage() {
           .select("*")
           .in("id", requirementIds)
       : Promise.resolve({ data: [] as AreaRequirement[] }),
-    supabase.from("areas").select("*"),
-    supabase.from("inspection_types").select("*"),
+    supabase.from("areas").select("*").eq("site_id", siteId),
+    supabase.from("inspection_types").select("*").eq("site_id", siteId),
     submitterIds.length
       ? supabase.from("profiles").select("*").in("id", submitterIds)
       : Promise.resolve({ data: [] as Profile[] }),
@@ -130,8 +110,8 @@ export default async function ReviewPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-semibold">Review submissions</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Week of {formatWeekRange(cycle.week_start, cycle.week_end)} · {items.length}{" "}
-          awaiting review
+          Week of {formatWeekRange(cycle.week_start, cycle.week_end)} ·{" "}
+          {items.length} awaiting review
         </p>
       </div>
 

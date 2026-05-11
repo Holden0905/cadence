@@ -2,8 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname, useRouter } from "next/navigation";
-import { createClient } from "@/utils/supabase/client";
+import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   History,
@@ -12,13 +11,34 @@ import {
   Link2,
   Mail,
   Users,
+  Building2,
   LogOut,
+  ChevronsUpDown,
+  Check,
+  Loader2,
 } from "lucide-react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import type { Profile } from "@/lib/types";
+import { switchSiteAction, signOutAction } from "@/app/(platform)/actions";
+import { toast } from "sonner";
+import type { Profile, Site, SiteMembership, SiteRole } from "@/lib/types";
 
 type NavItem = { href: string; label: string; icon: React.ElementType };
+
+const ROLE_LABEL: Record<SiteRole, string> = {
+  super_admin: "Super admin",
+  site_admin: "Site admin",
+  inspector: "Inspector",
+};
 
 const userItems: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -36,16 +56,35 @@ const adminConfigItems: NavItem[] = [
   { href: "/admin/users", label: "Users", icon: Users },
 ];
 
-export function Sidebar({ profile }: { profile: Profile }) {
-  const pathname = usePathname();
-  const router = useRouter();
-  const isAdmin = profile.role === "admin";
+const superAdminItems: NavItem[] = [
+  { href: "/admin/sites", label: "Sites", icon: Building2 },
+];
 
-  const handleSignOut = async () => {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push("/login");
-    router.refresh();
+export function Sidebar({
+  profile,
+  currentSite,
+  currentRole,
+  memberships,
+}: {
+  profile: Profile;
+  currentSite: Site;
+  currentRole: SiteRole;
+  memberships: SiteMembership[];
+}) {
+  const pathname = usePathname();
+  const isAdmin = currentRole === "site_admin" || currentRole === "super_admin";
+  const isSuperAdmin = currentRole === "super_admin";
+  const [signingOut, setSigningOut] = useState(false);
+  const [switching, setSwitching] = useState<string | null>(null);
+
+  const handleSwitchSite = async (siteId: string) => {
+    if (siteId === currentSite.id) return;
+    setSwitching(siteId);
+    const result = await switchSiteAction(siteId);
+    if (result && "error" in result) {
+      toast.error(result.error);
+      setSwitching(null);
+    }
   };
 
   const NavLink = ({ item }: { item: NavItem }) => {
@@ -83,9 +122,67 @@ export function Sidebar({ profile }: { profile: Profile }) {
             Cadence
           </p>
           <p className="text-xs text-sidebar-foreground/60">
-            Stepan Millsdale
+            {ROLE_LABEL[currentRole]}
           </p>
         </div>
+      </div>
+
+      <div className="px-3 pt-3">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="w-full flex items-center gap-2 rounded-md border border-sidebar-border bg-sidebar px-3 py-2 text-left hover:bg-sidebar-accent transition">
+              <Building2 className="size-4 shrink-0 text-sidebar-foreground/70" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate text-sidebar-foreground">
+                  {currentSite.name}
+                </p>
+                {currentSite.location && (
+                  <p className="text-[11px] text-sidebar-foreground/60 truncate">
+                    {currentSite.location}
+                  </p>
+                )}
+              </div>
+              <ChevronsUpDown className="size-3.5 shrink-0 text-sidebar-foreground/50" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="start"
+            className="w-56"
+            sideOffset={6}
+          >
+            <DropdownMenuLabel className="text-xs font-medium text-muted-foreground">
+              Switch site
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {memberships.map((m) => {
+              const active = m.site.id === currentSite.id;
+              const loading = switching === m.site.id;
+              return (
+                <DropdownMenuItem
+                  key={m.site.id}
+                  onClick={() => handleSwitchSite(m.site.id)}
+                  className="cursor-pointer"
+                >
+                  <div className="flex items-center gap-2 w-full">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">
+                        {m.site.name}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground capitalize truncate">
+                        {ROLE_LABEL[m.role]}
+                      </p>
+                    </div>
+                    {loading ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      active && <Check className="size-3.5" />
+                    )}
+                  </div>
+                </DropdownMenuItem>
+              );
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
@@ -108,6 +205,10 @@ export function Sidebar({ profile }: { profile: Profile }) {
             {adminConfigItems.map((item) => (
               <NavLink key={item.href} item={item} />
             ))}
+            {isSuperAdmin &&
+              superAdminItems.map((item) => (
+                <NavLink key={item.href} item={item} />
+              ))}
           </>
         )}
       </nav>
@@ -120,17 +221,22 @@ export function Sidebar({ profile }: { profile: Profile }) {
           <p className="text-xs text-sidebar-foreground/60 truncate">
             {profile.email}
           </p>
-          <p className="mt-1 inline-block rounded bg-sidebar-accent px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-sidebar-accent-foreground">
-            {profile.role}
-          </p>
         </div>
         <Button
           variant="outline"
           size="sm"
-          onClick={handleSignOut}
+          onClick={async () => {
+            setSigningOut(true);
+            await signOutAction();
+          }}
+          disabled={signingOut}
           className="w-full justify-start"
         >
-          <LogOut className="size-4" />
+          {signingOut ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <LogOut className="size-4" />
+          )}
           Sign out
         </Button>
       </div>

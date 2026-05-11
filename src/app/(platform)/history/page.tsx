@@ -3,16 +3,19 @@ import { createClient } from "@/utils/supabase/server";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatWeekRange } from "@/lib/dates";
+import { requireSiteContext } from "@/lib/admin-guard";
 import type { InspectionCycle, InspectionTask } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 export default async function HistoryPage() {
+  const { siteId } = await requireSiteContext();
   const supabase = await createClient();
 
   const { data: cycles } = await supabase
     .from("inspection_cycles")
     .select("*")
+    .eq("site_id", siteId)
     .order("week_start", { ascending: false });
 
   const cycleList = (cycles ?? []) as InspectionCycle[];

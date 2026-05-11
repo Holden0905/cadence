@@ -1,10 +1,27 @@
-export type Role = "admin" | "inspector";
+export type SiteRole = "super_admin" | "site_admin" | "inspector";
+
+export type Site = {
+  id: string;
+  name: string;
+  location: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type UserSite = {
+  id: string;
+  profile_id: string;
+  site_id: string;
+  role: SiteRole;
+  is_active: boolean;
+  created_at: string;
+};
 
 export type Profile = {
   id: string;
   email: string;
   full_name: string | null;
-  role: Role;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -12,6 +29,7 @@ export type Profile = {
 
 export type Area = {
   id: string;
+  site_id: string;
   name: string;
   sort_order: number;
   is_active: boolean;
@@ -21,6 +39,7 @@ export type Area = {
 
 export type InspectionType = {
   id: string;
+  site_id: string;
   name: string;
   abbreviation: string;
   description: string | null;
@@ -51,6 +70,7 @@ export type CycleStatus = "active" | "completed" | "archived";
 
 export type InspectionCycle = {
   id: string;
+  site_id: string;
   week_start: string;
   week_end: string;
   status: CycleStatus;
@@ -86,8 +106,14 @@ export type DocumentRow = {
 
 export type Recipient = {
   id: string;
+  site_id: string;
   email: string;
   full_name: string | null;
   is_active: boolean;
   created_at: string;
+};
+
+export type SiteMembership = {
+  site: Site;
+  role: SiteRole;
 };

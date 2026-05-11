@@ -26,7 +26,13 @@ import { Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { Recipient } from "@/lib/types";
 
-export function RecipientsAdmin({ recipients }: { recipients: Recipient[] }) {
+export function RecipientsAdmin({
+  recipients,
+  siteId,
+}: {
+  recipients: Recipient[];
+  siteId: string;
+}) {
   const router = useRouter();
   const supabase = createClient();
   const [editing, setEditing] = useState<Recipient | null>(null);
@@ -59,6 +65,7 @@ export function RecipientsAdmin({ recipients }: { recipients: Recipient[] }) {
       const { error } = await supabase.from("recipients").insert({
         email: draft.email,
         full_name: draft.full_name || null,
+        site_id: siteId,
       });
       if (error) toast.error(error.message);
       else {

@@ -1,16 +1,17 @@
 import { createClient } from "@/utils/supabase/server";
-import { requireAdmin } from "@/lib/admin-guard";
+import { requireSiteAdmin } from "@/lib/admin-guard";
 import { AreasAdmin } from "@/components/areas-admin";
 import type { Area } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminAreasPage() {
-  await requireAdmin();
+  const { siteId } = await requireSiteAdmin();
   const supabase = await createClient();
   const { data: areas } = await supabase
     .from("areas")
     .select("*")
+    .eq("site_id", siteId)
     .order("sort_order");
 
   return (
@@ -20,7 +21,7 @@ export default async function AdminAreasPage() {
         Plant areas where inspections occur. Deactivating preserves history but
         stops generating new tasks.
       </p>
-      <AreasAdmin areas={(areas ?? []) as Area[]} />
+      <AreasAdmin areas={(areas ?? []) as Area[]} siteId={siteId} />
     </div>
   );
 }

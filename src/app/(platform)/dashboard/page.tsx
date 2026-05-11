@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { InspectionMatrix } from "@/components/inspection-matrix";
 import { formatWeekRange, daysRemaining } from "@/lib/dates";
+import { requireSiteContext } from "@/lib/admin-guard";
 import type {
   Area,
   AreaRequirement,
@@ -17,11 +18,13 @@ import type {
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
+  const { siteId } = await requireSiteContext();
   const supabase = await createClient();
 
   const { data: cycle } = await supabase
     .from("inspection_cycles")
     .select("*")
+    .eq("site_id", siteId)
     .order("week_start", { ascending: false })
     .limit(1)
     .maybeSingle<InspectionCycle>();
@@ -31,8 +34,8 @@ export default async function DashboardPage() {
       <div className="px-8 py-10 max-w-5xl">
         <h1 className="text-2xl font-semibold mb-2">Dashboard</h1>
         <p className="text-muted-foreground">
-          No inspection cycles exist yet. The next one will be auto-generated
-          on Sunday at 6 AM CT.
+          No inspection cycles exist yet for this site. The next one will be
+          auto-generated on Sunday at 6 AM CT.
         </p>
       </div>
     );
@@ -49,11 +52,13 @@ export default async function DashboardPage() {
     supabase
       .from("areas")
       .select("*")
+      .eq("site_id", siteId)
       .eq("is_active", true)
       .order("sort_order"),
     supabase
       .from("inspection_types")
       .select("*")
+      .eq("site_id", siteId)
       .eq("is_active", true)
       .order("sort_order"),
     supabase.from("area_requirements").select("*").eq("is_active", true),

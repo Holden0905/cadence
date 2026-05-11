@@ -1,11 +1,12 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { InspectionMatrix } from "@/components/inspection-matrix";
 import { formatWeekRange, formatDateTime } from "@/lib/dates";
+import { requireSiteContext } from "@/lib/admin-guard";
 import type {
   Area,
   AreaRequirement,
@@ -25,6 +26,7 @@ export default async function HistoryDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const { siteId } = await requireSiteContext();
   const supabase = await createClient();
 
   const { data: cycle } = await supabase
@@ -34,6 +36,7 @@ export default async function HistoryDetailPage({
     .single<InspectionCycle>();
 
   if (!cycle) notFound();
+  if (cycle.site_id !== siteId) redirect("/history");
 
   const [
     { data: areas },
@@ -43,8 +46,16 @@ export default async function HistoryDetailPage({
     { data: owners },
     { data: profiles },
   ] = await Promise.all([
-    supabase.from("areas").select("*").order("sort_order"),
-    supabase.from("inspection_types").select("*").order("sort_order"),
+    supabase
+      .from("areas")
+      .select("*")
+      .eq("site_id", siteId)
+      .order("sort_order"),
+    supabase
+      .from("inspection_types")
+      .select("*")
+      .eq("site_id", siteId)
+      .order("sort_order"),
     supabase.from("area_requirements").select("*"),
     supabase.from("inspection_tasks").select("*").eq("cycle_id", cycle.id),
     supabase.from("area_requirement_owners").select("*"),

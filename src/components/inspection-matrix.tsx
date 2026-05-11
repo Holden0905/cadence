@@ -14,6 +14,8 @@ import type {
   InspectionTask,
   InspectionType,
   Profile,
+  SiteRole,
+  TaskStatus,
 } from "@/lib/types";
 
 type Props = {
@@ -25,6 +27,7 @@ type Props = {
   documents: DocumentRow[];
   owners: AreaRequirementOwner[];
   profiles: Profile[];
+  userRole: SiteRole;
 };
 
 export function InspectionMatrix({
@@ -36,6 +39,7 @@ export function InspectionMatrix({
   documents,
   owners,
   profiles,
+  userRole,
 }: Props) {
   const matrix = useMemo(
     () =>
@@ -58,11 +62,15 @@ export function InspectionMatrix({
   } | null>(null);
 
   const [previewCell, setPreviewCell] = useState<{
+    taskId: string;
+    status: TaskStatus;
     documents: DocumentRow[];
     areaName: string;
     typeName: string;
     statusLabel: string;
   } | null>(null);
+
+  const isAdmin = userRole === "site_admin" || userRole === "super_admin";
 
   const handleCellClick = (areaId: string, typeId: string) => {
     const cell = getCell(matrix, areaId, typeId);
@@ -79,6 +87,8 @@ export function InspectionMatrix({
       });
     } else {
       setPreviewCell({
+        taskId: cell.task.id,
+        status: cell.task.status,
         documents: cell.documents,
         areaName: area.name,
         typeName: type.name,
@@ -86,6 +96,23 @@ export function InspectionMatrix({
       });
     }
   };
+
+  const handleAddMoreFromPreview = () => {
+    if (!previewCell) return;
+    setUploadCell({
+      taskId: previewCell.taskId,
+      areaName: previewCell.areaName,
+      typeName: previewCell.typeName,
+    });
+    setPreviewCell(null);
+  };
+
+  // Submitted tasks: anyone can add more.
+  // Approved tasks: only admins can add more (late corrections).
+  const previewAllowsAdd =
+    previewCell &&
+    (previewCell.status === "submitted" ||
+      (previewCell.status === "approved" && isAdmin));
 
   return (
     <>
@@ -152,6 +179,7 @@ export function InspectionMatrix({
           areaName={previewCell.areaName}
           inspectionTypeName={previewCell.typeName}
           taskStatusLabel={previewCell.statusLabel}
+          onAddMore={previewAllowsAdd ? handleAddMoreFromPreview : undefined}
         />
       )}
     </>

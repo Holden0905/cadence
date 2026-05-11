@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/utils/supabase/admin";
 import {
   FROM_ADDRESS,
+  appBaseUrl,
   formatWeekRange,
   getResend,
 } from "@/lib/email/resend-client";
@@ -16,10 +17,12 @@ import type {
 
 export type SummaryResult = {
   site: string;
-  status: "sent" | "skipped" | "no-active-cycle" | "no-recipients";
+  status: "sent" | "partial" | "skipped" | "no-active-cycle" | "no-recipients";
   recipients?: number;
+  succeeded?: number;
+  failed?: number;
+  failures?: { email: string; error: string }[];
   reason?: string;
-  emailId?: string;
 };
 
 function renderMatrix(
@@ -134,6 +137,7 @@ export async function sendSummaryForSite(
 
   const weekRange = formatWeekRange(cycle.week_start, cycle.week_end);
   const matrixHtml = renderMatrix(areas, types, reqByAreaType, taskByReq);
+  const appUrl = appBaseUrl();
 
   const html = `
     <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:900px;padding:24px;color:#1a1a1a;">
@@ -146,6 +150,9 @@ export async function sendSummaryForSite(
         ${pending > 0 ? `<span style="color:#b91c1c;">✗ ${pending} pending.</span>` : ""}
       </p>
       ${matrixHtml}
+      <p style="margin:20px 0 0;">
+        <a href="${appUrl}/dashboard" style="display:inline-block;padding:8px 14px;background:#c8102e;color:#ffffff;border-radius:6px;text-decoration:none;font-weight:600;font-size:13px;">View in Cadence</a>
+      </p>
       <p style="margin-top:24px;font-size:12px;color:#6b7280;">
         Legend: <span style="color:#15803d;">✓ Approved</span> ·
         <span style="color:#854d0e;">⧳ Submitted, pending review</span> ·
@@ -157,37 +164,59 @@ export async function sendSummaryForSite(
   `;
 
   const subject = `${opts.subjectPrefix ?? ""}Cadence — Weekly Inspection Status for ${site.name} — Week of ${weekRange}`;
-  const toAddresses = recipients.map((r) => r.email);
 
   if (!resend) {
     return {
       site: site.name,
       status: "skipped",
       reason: "RESEND_API_KEY not set",
-      recipients: toAddresses.length,
+      recipients: recipients.length,
     };
   }
 
-  const { data, error } = await resend.emails.send({
-    from: FROM_ADDRESS,
-    to: toAddresses,
-    subject,
-    html,
-  });
+  // Send one email per recipient so a single invalid address doesn't
+  // poison the entire batch.
+  const failures: { email: string; error: string }[] = [];
+  let succeeded = 0;
 
-  if (error) {
-    return {
-      site: site.name,
-      status: "skipped",
-      reason: error.message,
-      recipients: toAddresses.length,
-    };
+  for (const r of recipients) {
+    try {
+      const { error } = await resend.emails.send({
+        from: FROM_ADDRESS,
+        to: [r.email],
+        subject,
+        html,
+      });
+      if (error) {
+        console.error(
+          `[send-summary] ${site.name} → ${r.email} failed:`,
+          error.message,
+        );
+        failures.push({ email: r.email, error: error.message });
+      } else {
+        succeeded++;
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(
+        `[send-summary] ${site.name} → ${r.email} threw:`,
+        message,
+      );
+      failures.push({ email: r.email, error: message });
+    }
   }
 
   return {
     site: site.name,
-    status: "sent",
-    recipients: toAddresses.length,
-    emailId: data?.id,
+    status:
+      failures.length === 0
+        ? "sent"
+        : succeeded === 0
+          ? "skipped"
+          : "partial",
+    recipients: recipients.length,
+    succeeded,
+    failed: failures.length,
+    failures: failures.length ? failures : undefined,
   };
 }

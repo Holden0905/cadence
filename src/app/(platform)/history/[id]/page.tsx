@@ -33,7 +33,7 @@ export default async function HistoryDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { siteId } = await requireSiteContext();
+  const { siteId, role } = await requireSiteContext();
   const supabase = await createClient();
 
   const { data: cycle } = await supabase
@@ -133,6 +133,7 @@ export default async function HistoryDetailPage({
         documents={documents}
         owners={(owners ?? []) as AreaRequirementOwner[]}
         profiles={(profiles ?? []) as Profile[]}
+        userRole={role}
       />
     </div>
   );

@@ -10,10 +10,24 @@ import type { Site, SiteRole } from "@/lib/types";
 
 export type DeleteDocumentResult = { ok: true } | { error: string };
 export type TestSummaryResult =
-  | { ok: true; recipients: number; reason?: string; status: string }
+  | {
+      ok: true;
+      recipients: number;
+      status: string;
+      reason?: string;
+      succeeded?: number;
+      failed?: number;
+    }
   | { error: string };
 export type TestNudgeResult =
-  | { ok: true; sentTo: number; status: string; reason?: string }
+  | {
+      ok: true;
+      sentTo: number;
+      status: string;
+      reason?: string;
+      succeeded?: number;
+      failed?: number;
+    }
   | { error: string };
 
 export async function deleteDocumentAction(
@@ -147,6 +161,8 @@ export async function sendTestSummaryAction(): Promise<TestSummaryResult> {
     recipients: result.recipients ?? 0,
     status: result.status,
     reason: result.reason,
+    succeeded: result.succeeded,
+    failed: result.failed,
   };
 }
 
@@ -177,10 +193,15 @@ export async function sendTestNudgeAction(): Promise<TestNudgeResult> {
         : "No pending tasks for this cycle — nothing to nudge",
     };
 
+  const sentTo = result.emails?.length ?? 0;
+  const succeeded = (result.emails ?? []).filter((e) => e.ok).length;
+  const failed = sentTo - succeeded;
   return {
     ok: true,
-    sentTo: result.emails?.length ?? 0,
+    sentTo,
     status: result.status,
     reason: result.reason,
+    succeeded,
+    failed,
   };
 }

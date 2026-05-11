@@ -18,10 +18,12 @@ import type {
 
 export type NudgeResult = {
   site: string;
-  status: "skipped" | "sent" | "no-active-cycle" | "no-pending";
-  emails?: { to: string; status: string }[];
+  status: "sent" | "partial" | "skipped" | "no-active-cycle" | "no-pending";
+  emails?: { to: string; ok: boolean; error?: string }[];
   reason?: string;
 };
+
+type GroupTask = { areaName: string; typeName: string };
 
 export async function sendNudgesForSite(
   site: Site,
@@ -86,10 +88,11 @@ export async function sendNudgesForSite(
 
   type Group = {
     primary: Profile;
-    backups: Set<string>;
-    tasks: { areaName: string; typeName: string }[];
+    backups: Profile[];
+    tasks: GroupTask[];
   };
   const groups = new Map<string, Group>();
+  const backupSeenPerPrimary = new Map<string, Set<string>>();
 
   for (const task of pendingTasks) {
     const req = reqById.get(task.area_requirement_id);
@@ -107,14 +110,20 @@ export async function sendNudgesForSite(
       if (!primary) continue;
       const group = groups.get(primary.id) ?? {
         primary,
-        backups: new Set<string>(),
-        tasks: [] as { areaName: string; typeName: string }[],
+        backups: [] as Profile[],
+        tasks: [] as GroupTask[],
       };
       group.tasks.push({ areaName: area.name, typeName: type.name });
+      const seen =
+        backupSeenPerPrimary.get(primary.id) ?? new Set<string>();
       for (const bo of backups) {
         const backup = profileById.get(bo.profile_id);
-        if (backup && backup.id !== primary.id) group.backups.add(backup.email);
+        if (!backup || backup.id === primary.id) continue;
+        if (seen.has(backup.id)) continue;
+        seen.add(backup.id);
+        group.backups.push(backup);
       }
+      backupSeenPerPrimary.set(primary.id, seen);
       groups.set(primary.id, group);
     }
   }
@@ -123,7 +132,7 @@ export async function sendNudgesForSite(
     return {
       site: site.name,
       status: "no-pending",
-      reason: "pending tasks exist but no primary owners assigned",
+      reason: "pending tasks exist but no primary owners are assigned",
     };
   }
 
@@ -137,7 +146,8 @@ export async function sendNudgesForSite(
 
   const weekRange = formatWeekRange(cycle.week_start, cycle.week_end);
   const appUrl = appBaseUrl();
-  const results: { to: string; status: string }[] = [];
+  const subject = `${opts.subjectPrefix ?? ""}Cadence — Outstanding Inspections at ${site.name} for Week of ${weekRange}`;
+  const results: { to: string; ok: boolean; error?: string }[] = [];
 
   for (const group of groups.values()) {
     const taskListHtml = group.tasks
@@ -145,28 +155,108 @@ export async function sendNudgesForSite(
         (t) => `<li><strong>${t.areaName}</strong> — ${t.typeName}</li>`,
       )
       .join("");
-    const html = `
-      <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:600px;padding:20px;color:#1a1a1a;">
-        <p>Hi ${group.primary.full_name || group.primary.email},</p>
-        <p>The following inspections are still pending at <strong>${site.name}</strong> for the week of <strong>${weekRange}</strong>:</p>
-        <ul style="line-height:1.7;">${taskListHtml}</ul>
-        <p>Please upload your inspection documents at:<br/><a href="${appUrl}/dashboard" style="color:#2563eb;">${appUrl}/dashboard</a></p>
-        <p style="color:#6b7280;font-size:12px;margin-top:32px;">— Cadence Automated System<br/>${site.name}${site.location ? " — " + site.location : ""}</p>
-      </div>
-    `;
 
-    const { data, error } = await resend.emails.send({
-      from: FROM_ADDRESS,
-      to: [group.primary.email],
-      cc: group.backups.size ? Array.from(group.backups) : undefined,
-      subject: `${opts.subjectPrefix ?? ""}Cadence — Outstanding Inspections at ${site.name} for Week of ${weekRange}`,
-      html,
+    // Send the primary their email (no CC — each recipient gets their
+    // own independent send so one bad address can't poison the rest).
+    const primaryHtml = buildBody({
+      greetingName: group.primary.full_name || group.primary.email,
+      site,
+      weekRange,
+      taskListHtml,
+      appUrl,
+      asBackupOf: null,
     });
-    results.push({
+    await sendOne({
       to: group.primary.email,
-      status: error ? `error: ${error.message}` : `sent (${data?.id ?? "?"})`,
+      subject,
+      html: primaryHtml,
+      results,
     });
+
+    // Then send each backup their own copy with a note that they're a
+    // backup for this primary.
+    for (const backup of group.backups) {
+      const backupHtml = buildBody({
+        greetingName: backup.full_name || backup.email,
+        site,
+        weekRange,
+        taskListHtml,
+        appUrl,
+        asBackupOf: group.primary.full_name || group.primary.email,
+      });
+      await sendOne({
+        to: backup.email,
+        subject,
+        html: backupHtml,
+        results,
+      });
+    }
   }
 
-  return { site: site.name, status: "sent", emails: results };
+  async function sendOne(args: {
+    to: string;
+    subject: string;
+    html: string;
+    results: typeof results;
+  }) {
+    try {
+      const { error } = await resend!.emails.send({
+        from: FROM_ADDRESS,
+        to: [args.to],
+        subject: args.subject,
+        html: args.html,
+      });
+      if (error) {
+        console.error(
+          `[send-nudge] ${site.name} → ${args.to} failed:`,
+          error.message,
+        );
+        args.results.push({ to: args.to, ok: false, error: error.message });
+      } else {
+        args.results.push({ to: args.to, ok: true });
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(
+        `[send-nudge] ${site.name} → ${args.to} threw:`,
+        message,
+      );
+      args.results.push({ to: args.to, ok: false, error: message });
+    }
+  }
+
+  const okCount = results.filter((r) => r.ok).length;
+  const failCount = results.length - okCount;
+
+  return {
+    site: site.name,
+    status:
+      failCount === 0 ? "sent" : okCount === 0 ? "skipped" : "partial",
+    emails: results,
+  };
+}
+
+function buildBody(args: {
+  greetingName: string;
+  site: Site;
+  weekRange: string;
+  taskListHtml: string;
+  appUrl: string;
+  asBackupOf: string | null;
+}): string {
+  const backupNote = args.asBackupOf
+    ? `<p style="background:#fef9c3;color:#854d0e;padding:8px 12px;border-radius:6px;font-size:13px;">You're receiving this as the <strong>backup owner</strong> for <strong>${args.asBackupOf}</strong>.</p>`
+    : "";
+  return `
+    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:600px;padding:20px;color:#1a1a1a;">
+      <p>Hi ${args.greetingName},</p>
+      ${backupNote}
+      <p>The following inspections are still pending at <strong>${args.site.name}</strong> for the week of <strong>${args.weekRange}</strong>:</p>
+      <ul style="line-height:1.7;">${args.taskListHtml}</ul>
+      <p style="margin-top:20px;">
+        <a href="${args.appUrl}/dashboard" style="display:inline-block;padding:8px 14px;background:#c8102e;color:#ffffff;border-radius:6px;text-decoration:none;font-weight:600;font-size:13px;">Upload in Cadence</a>
+      </p>
+      <p style="color:#6b7280;font-size:12px;margin-top:32px;">— Cadence Automated System<br/>${args.site.name}${args.site.location ? " — " + args.site.location : ""}</p>
+    </div>
+  `;
 }

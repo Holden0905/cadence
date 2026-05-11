@@ -195,6 +195,7 @@ export default async function DashboardPage() {
         documents={documents}
         owners={(owners ?? []) as AreaRequirementOwner[]}
         profiles={(profiles ?? []) as Profile[]}
+        userRole={role}
       />
     </div>
   );

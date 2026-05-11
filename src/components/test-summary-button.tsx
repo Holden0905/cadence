@@ -25,6 +25,12 @@ export function TestSummaryButton() {
       );
       return;
     }
+    if (result.status === "partial") {
+      toast.warning(
+        `Test summary sent to ${result.succeeded ?? "?"} of ${result.recipients} recipients. ${result.failed} failed — check server logs.`,
+      );
+      return;
+    }
     toast.success(
       `Test summary sent to ${result.recipients} recipient${result.recipients === 1 ? "" : "s"}`,
     );

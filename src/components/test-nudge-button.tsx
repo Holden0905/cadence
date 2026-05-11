@@ -25,8 +25,14 @@ export function TestNudgeButton() {
       );
       return;
     }
+    if (result.status === "partial") {
+      toast.warning(
+        `Test nudges: ${result.succeeded ?? "?"} of ${result.sentTo} sent. ${result.failed} failed — check server logs.`,
+      );
+      return;
+    }
     toast.success(
-      `Test nudges sent to ${result.sentTo} primary owner${result.sentTo === 1 ? "" : "s"}`,
+      `Test nudges sent to ${result.sentTo} owner${result.sentTo === 1 ? "" : "s"}`,
     );
   };
 

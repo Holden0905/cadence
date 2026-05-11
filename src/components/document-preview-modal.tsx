@@ -13,7 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { FileText, Download, Loader2, Trash2 } from "lucide-react";
+import { FileText, Download, Loader2, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import type { DocumentRow } from "@/lib/types";
 
@@ -24,6 +24,8 @@ type Props = {
   areaName: string;
   inspectionTypeName: string;
   taskStatusLabel: string;
+  /** Provided by parent when the user is allowed to attach more files. */
+  onAddMore?: () => void;
 };
 
 export function DocumentPreviewModal({
@@ -33,6 +35,7 @@ export function DocumentPreviewModal({
   areaName,
   inspectionTypeName,
   taskStatusLabel,
+  onAddMore,
 }: Props) {
   const router = useRouter();
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
@@ -41,7 +44,6 @@ export function DocumentPreviewModal({
   const [confirmDoc, setConfirmDoc] = useState<DocumentRow | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  // Reset local docs when the modal reopens with a new set
   useEffect(() => {
     if (open) setDocs(documents);
   }, [open, documents]);
@@ -174,6 +176,15 @@ export function DocumentPreviewModal({
                 );
               })}
             </div>
+          )}
+
+          {onAddMore && (
+            <DialogFooter className="sm:justify-start">
+              <Button variant="outline" onClick={onAddMore}>
+                <Upload className="size-4" />
+                Add more documents
+              </Button>
+            </DialogFooter>
           )}
         </DialogContent>
       </Dialog>

@@ -79,17 +79,23 @@ export function RequirementsAdmin({
 
   const toggleRequirement = async (areaId: string, typeId: string) => {
     const existing = reqByAreaType.get(`${areaId}::${typeId}`);
-    if (existing) {
-      const { error } = await supabase
-        .from("area_requirements")
-        .delete()
-        .eq("id", existing.id);
-      if (error) toast.error(error.message);
-    } else {
+    if (!existing) {
+      // No row yet — INSERT active. Trigger creates a task on the
+      // current active cycle.
       const { error } = await supabase.from("area_requirements").insert({
         area_id: areaId,
         inspection_type_id: typeId,
+        is_active: true,
       });
+      if (error) toast.error(error.message);
+    } else {
+      // Flip is_active. Owners survive because we never DELETE the
+      // requirement row. Trigger creates a task on the active cycle
+      // when is_active goes false→true.
+      const { error } = await supabase
+        .from("area_requirements")
+        .update({ is_active: !existing.is_active })
+        .eq("id", existing.id);
       if (error) toast.error(error.message);
     }
     router.refresh();
@@ -129,6 +135,7 @@ export function RequirementsAdmin({
                 {inspectionTypes.map((t) => {
                   const req = reqByAreaType.get(`${a.id}::${t.id}`);
                   const reqOwners = req ? ownersByReq.get(req.id) ?? [] : [];
+                  const isActive = !!(req && req.is_active);
                   return (
                     <td key={t.id} className="px-2 py-1 text-center">
                       <div className="flex items-center justify-center gap-1">
@@ -136,12 +143,19 @@ export function RequirementsAdmin({
                           type="button"
                           onClick={() => toggleRequirement(a.id, t.id)}
                           className={`size-7 rounded text-xs font-semibold transition cursor-pointer ${
-                            req
+                            isActive
                               ? "bg-primary text-primary-foreground hover:opacity-90"
                               : "bg-muted text-muted-foreground hover:bg-muted/70"
                           }`}
+                          title={
+                            isActive
+                              ? "Active — click to deactivate (owners preserved)"
+                              : req
+                                ? "Inactive — click to reactivate"
+                                : "Click to add requirement"
+                          }
                         >
-                          {req ? "✓" : ""}
+                          {isActive ? "✓" : ""}
                         </button>
                         {req && (
                           <button

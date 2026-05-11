@@ -148,6 +148,9 @@ export function UploadModal({
         if (insertErr) throw insertErr;
       }
 
+      // Only transition pending → submitted. If the task is already
+      // submitted or approved, don't overwrite submitted_by/at or
+      // approved_by/at — we're just adding more documents.
       const { error: taskErr } = await supabase
         .from("inspection_tasks")
         .update({
@@ -155,7 +158,8 @@ export function UploadModal({
           submitted_by: user.id,
           submitted_at: new Date().toISOString(),
         })
-        .eq("id", taskId);
+        .eq("id", taskId)
+        .eq("status", "pending");
       if (taskErr) throw taskErr;
 
       toast.success(

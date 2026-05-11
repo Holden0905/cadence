@@ -12,13 +12,15 @@ export type SendPasswordResetResult =
       ok: true;
       sent: boolean;
       reason?: "no-user" | "no-resend";
+      emailId?: string;
     }
   | { error: string };
 
 /**
  * Generate a Supabase recovery link for `email` and deliver it via
- * Resend. For mode='invite', uses welcome-toned copy. For mode='reset',
- * the standard "you requested a password reset" copy.
+ * Resend (NOT Supabase's built-in mailer). Same Resend client and
+ * From address (`Cadence <cadence@pesldar.com>`) used by the nudge
+ * and summary emails.
  *
  * Silently succeeds if the user doesn't exist (no enumeration leak)
  * but returns reason='no-user' for the caller to log.
@@ -34,16 +36,32 @@ export async function sendPasswordResetEmail(args: {
   const resend = getResend();
   const appUrl = appBaseUrl();
 
-  // generateLink only works for existing users. Look up first and
-  // silently succeed for nonexistent users so we don't leak whether
-  // an account exists.
-  const { data: profile } = await admin
+  console.log(
+    `[send-password-reset] start mode=${mode} email=${args.email} appUrl=${appUrl} resend=${resend ? "configured" : "MISSING"} from=${FROM_ADDRESS}`,
+  );
+
+  // Case-insensitive lookup so a typo like "Brian@Stepan.com" still
+  // resolves the profile that was stored lowercase.
+  const { data: profile, error: profileLookupError } = await admin
     .from("profiles")
     .select("id, email, full_name")
-    .eq("email", args.email)
+    .ilike("email", args.email)
     .maybeSingle<{ id: string; email: string; full_name: string | null }>();
 
-  if (!profile) return { ok: true, sent: false, reason: "no-user" };
+  if (profileLookupError) {
+    console.error(
+      "[send-password-reset] profile lookup failed:",
+      profileLookupError,
+    );
+    return { error: profileLookupError.message };
+  }
+
+  if (!profile) {
+    console.log(
+      `[send-password-reset] no profile for ${args.email} — silently skipping send`,
+    );
+    return { ok: true, sent: false, reason: "no-user" };
+  }
 
   const redirectTo = `${appUrl}/auth/callback?next=/auth/update-password`;
   console.log(
@@ -58,11 +76,20 @@ export async function sendPasswordResetEmail(args: {
     });
 
   if (linkError || !linkData.properties?.action_link) {
+    console.error("[send-password-reset] generateLink failed:", linkError);
     return { error: linkError?.message ?? "Failed to generate reset link" };
   }
   const actionLink = linkData.properties.action_link;
+  console.log(
+    `[send-password-reset] action_link generated (${actionLink.slice(0, 80)}…)`,
+  );
 
-  if (!resend) return { ok: true, sent: false, reason: "no-resend" };
+  if (!resend) {
+    console.warn(
+      "[send-password-reset] Resend client unavailable — RESEND_API_KEY not set in this env",
+    );
+    return { ok: true, sent: false, reason: "no-resend" };
+  }
 
   const greetingName =
     args.fullName ?? profile.full_name ?? profile.email;
@@ -81,22 +108,35 @@ export async function sendPasswordResetEmail(args: {
       ? `Welcome to Cadence${args.siteName ? ` — ${args.siteName}` : ""}`
       : "Reset your Cadence password";
 
-  const { error } = await resend.emails.send({
+  console.log(
+    `[send-password-reset] sending via Resend → from=${FROM_ADDRESS} to=${profile.email} subject="${subject}"`,
+  );
+
+  const sendResult = await resend.emails.send({
     from: FROM_ADDRESS,
     to: [profile.email],
     subject,
     html,
   });
 
-  if (error) {
+  console.log(
+    "[send-password-reset] Resend response:",
+    JSON.stringify(sendResult),
+  );
+
+  if (sendResult.error) {
     console.error(
-      `[send-password-reset] ${mode} → ${profile.email} failed:`,
-      error.message,
+      `[send-password-reset] ${mode} → ${profile.email} Resend rejected:`,
+      sendResult.error,
     );
-    return { error: error.message };
+    return { error: sendResult.error.message };
   }
 
-  return { ok: true, sent: true };
+  console.log(
+    `[send-password-reset] ✓ delivered to ${profile.email} (id=${sendResult.data?.id ?? "?"})`,
+  );
+
+  return { ok: true, sent: true, emailId: sendResult.data?.id };
 }
 
 function buildResetBody(args: {

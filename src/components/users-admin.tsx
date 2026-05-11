@@ -228,15 +228,29 @@ export function UsersAdmin({
                 const isSelf = u.profile.id === callerProfileId;
                 return (
                   <TableRow key={u.membershipId}>
-                    <TableCell className="font-medium">
-                      {u.profile.full_name || "—"}
-                      {isSelf && (
-                        <span className="ml-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                          You
+                    <TableCell className="font-medium max-w-[14rem]">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span
+                          className="truncate"
+                          title={u.profile.full_name || u.profile.email}
+                        >
+                          {u.profile.full_name || "—"}
                         </span>
-                      )}
+                        {isSelf && (
+                          <span className="shrink-0 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                            You
+                          </span>
+                        )}
+                      </div>
                     </TableCell>
-                    <TableCell>{u.profile.email}</TableCell>
+                    <TableCell className="max-w-[16rem]">
+                      <span
+                        className="block truncate"
+                        title={u.profile.email}
+                      >
+                        {u.profile.email}
+                      </span>
+                    </TableCell>
                     <TableCell>
                       <Select
                         value={u.role}
@@ -451,13 +465,25 @@ export function UsersAdmin({
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Remove from this site?</DialogTitle>
-            <DialogDescription>
-              <strong>
-                {deleting?.profile.full_name || deleting?.profile.email}
-              </strong>{" "}
-              will lose access to this site. Their account stays intact and
-              they can be re-invited later. If this is their only site
-              membership, they&apos;ll be locked out until added somewhere.
+            <DialogDescription asChild>
+              <div className="space-y-2">
+                <p className="font-medium text-foreground truncate" title={
+                  deleting?.profile.full_name || deleting?.profile.email
+                }>
+                  {deleting?.profile.full_name || deleting?.profile.email}
+                </p>
+                {deleting?.profile.full_name && (
+                  <p className="text-xs text-muted-foreground truncate" title={deleting.profile.email}>
+                    {deleting.profile.email}
+                  </p>
+                )}
+                <p>
+                  This person will lose access to this site. Their account
+                  stays intact and they can be re-invited later. If this is
+                  their only site membership, they&apos;ll be locked out
+                  until added somewhere.
+                </p>
+              </div>
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

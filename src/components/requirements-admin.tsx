@@ -277,17 +277,47 @@ function OwnersDialog({
   });
 
   const removeOwner = async (id: string) => {
+    const target = owners.find((o) => o.id === id);
     setBusy(true);
+
+    // If removing the primary, promote a backup (if any) to primary
+    // first so the requirement doesn't end up without a primary.
+    let promotedBackupName: string | null = null;
+    if (target && target.owner_role === "primary") {
+      const backupCandidate = sortedOwners.find(
+        (o) => o.id !== id && o.owner_role === "backup",
+      );
+      if (backupCandidate) {
+        const { error: promoteError } = await supabase
+          .from("area_requirement_owners")
+          .update({ owner_role: "primary" })
+          .eq("id", backupCandidate.id);
+        if (promoteError) {
+          setBusy(false);
+          toast.error(promoteError.message);
+          return;
+        }
+        const profile = profileById.get(backupCandidate.profile_id);
+        promotedBackupName =
+          profile?.full_name || profile?.email || "the backup owner";
+      }
+    }
+
     const { error } = await supabase
       .from("area_requirement_owners")
       .delete()
       .eq("id", id);
     setBusy(false);
-    if (error) toast.error(error.message);
-    else {
-      toast.success("Owner removed");
-      onChanged();
+    if (error) {
+      toast.error(error.message);
+      return;
     }
+    if (promotedBackupName) {
+      toast.success(`Owner removed — ${promotedBackupName} promoted to primary`);
+    } else {
+      toast.success("Owner removed");
+    }
+    onChanged();
   };
 
   const assignedIds = new Set(owners.map((o) => o.profile_id));

@@ -45,13 +45,16 @@ export async function sendPasswordResetEmail(args: {
 
   if (!profile) return { ok: true, sent: false, reason: "no-user" };
 
+  const redirectTo = `${appUrl}/auth/callback?next=/auth/update-password`;
+  console.log(
+    `[send-password-reset] generating recovery link for ${profile.email} with redirect_to=${redirectTo}`,
+  );
+
   const { data: linkData, error: linkError } =
     await admin.auth.admin.generateLink({
       type: "recovery",
       email: profile.email,
-      options: {
-        redirectTo: `${appUrl}/auth/callback?next=/auth/update-password`,
-      },
+      options: { redirectTo },
     });
 
   if (linkError || !linkData.properties?.action_link) {

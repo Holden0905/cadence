@@ -10,7 +10,7 @@ export function getResend(): Resend | null {
 }
 
 export const FROM_ADDRESS =
-  process.env.CADENCE_FROM_ADDRESS ?? "Cadence <onboarding@resend.dev>";
+  process.env.CADENCE_FROM_ADDRESS ?? "Cadence <cadence@pesldar.com>";
 
 export function formatWeekRange(start: string, end: string): string {
   const s = new Date(start + "T00:00:00");

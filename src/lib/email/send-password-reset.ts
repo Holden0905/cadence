@@ -63,7 +63,12 @@ export async function sendPasswordResetEmail(args: {
     return { ok: true, sent: false, reason: "no-user" };
   }
 
-  const redirectTo = `${appUrl}/auth/callback?next=/auth/update-password`;
+  // Supabase's generateLink for recovery returns an implicit-flow link
+  // (token in the URL hash). Hashes don't reach the server, so the
+  // recovery callback must be a client page — /update-password parses
+  // the hash and calls setSession itself. Don't route through
+  // /auth/callback (which is server-side code exchange / PKCE only).
+  const redirectTo = `${appUrl}/update-password`;
   console.log(
     `[send-password-reset] generating recovery link for ${profile.email} with redirect_to=${redirectTo}`,
   );

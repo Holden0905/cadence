@@ -5,11 +5,15 @@ import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { requireSuperAdmin } from "@/lib/admin-guard";
 import { sendSummaryForSite } from "@/lib/email/send-summary-for-site";
+import { sendNudgesForSite } from "@/lib/email/send-nudges-for-site";
 import type { Site, SiteRole } from "@/lib/types";
 
 export type DeleteDocumentResult = { ok: true } | { error: string };
 export type TestSummaryResult =
   | { ok: true; recipients: number; reason?: string; status: string }
+  | { error: string };
+export type TestNudgeResult =
+  | { ok: true; sentTo: number; status: string; reason?: string }
   | { error: string };
 
 export async function deleteDocumentAction(
@@ -141,6 +145,41 @@ export async function sendTestSummaryAction(): Promise<TestSummaryResult> {
   return {
     ok: true,
     recipients: result.recipients ?? 0,
+    status: result.status,
+    reason: result.reason,
+  };
+}
+
+/**
+ * Super-admin only: fire the Wednesday nudge logic for the current
+ * site immediately, with "[TEST]" in the subject so primary/backup
+ * owners know it isn't the scheduled run.
+ */
+export async function sendTestNudgeAction(): Promise<TestNudgeResult> {
+  const { siteId } = await requireSuperAdmin();
+  const admin = createAdminClient();
+
+  const { data: site } = await admin
+    .from("sites")
+    .select("*")
+    .eq("id", siteId)
+    .maybeSingle<Site>();
+  if (!site) return { error: "Current site not found" };
+
+  const result = await sendNudgesForSite(site, { subjectPrefix: "[TEST] " });
+
+  if (result.status === "no-active-cycle")
+    return { error: "No active cycle for this site yet" };
+  if (result.status === "no-pending")
+    return {
+      error: result.reason
+        ? `No nudges to send — ${result.reason}`
+        : "No pending tasks for this cycle — nothing to nudge",
+    };
+
+  return {
+    ok: true,
+    sentTo: result.emails?.length ?? 0,
     status: result.status,
     reason: result.reason,
   };

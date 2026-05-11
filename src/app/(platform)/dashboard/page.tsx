@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { InspectionMatrix } from "@/components/inspection-matrix";
 import { TestSummaryButton } from "@/components/test-summary-button";
+import { TestNudgeButton } from "@/components/test-nudge-button";
 import { formatWeekRange, daysRemaining } from "@/lib/dates";
 import { requireSiteContext } from "@/lib/admin-guard";
 import { isSuperAdminRole } from "@/lib/site-context";
@@ -96,8 +97,13 @@ export default async function DashboardPage() {
             Week of {formatWeekRange(cycle.week_start, cycle.week_end)}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          {isSuper && <TestSummaryButton />}
+        <div className="flex items-center gap-2 flex-wrap">
+          {isSuper && (
+            <>
+              <TestNudgeButton />
+              <TestSummaryButton />
+            </>
+          )}
           <Badge
             variant={cycle.status === "active" ? "default" : "secondary"}
             className="capitalize"

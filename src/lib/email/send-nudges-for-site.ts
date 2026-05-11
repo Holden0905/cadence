@@ -23,7 +23,10 @@ export type NudgeResult = {
   reason?: string;
 };
 
-export async function sendNudgesForSite(site: Site): Promise<NudgeResult> {
+export async function sendNudgesForSite(
+  site: Site,
+  opts: { subjectPrefix?: string } = {},
+): Promise<NudgeResult> {
   const admin = createAdminClient();
   const resend = getResend();
 
@@ -156,7 +159,7 @@ export async function sendNudgesForSite(site: Site): Promise<NudgeResult> {
       from: FROM_ADDRESS,
       to: [group.primary.email],
       cc: group.backups.size ? Array.from(group.backups) : undefined,
-      subject: `Cadence — Outstanding Inspections at ${site.name} for Week of ${weekRange}`,
+      subject: `${opts.subjectPrefix ?? ""}Cadence — Outstanding Inspections at ${site.name} for Week of ${weekRange}`,
       html,
     });
     results.push({

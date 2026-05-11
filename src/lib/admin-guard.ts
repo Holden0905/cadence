@@ -64,10 +64,10 @@ export async function requireSiteContext(): Promise<AuthContext> {
   if (!user) redirect("/login");
 
   const siteId = await getCurrentSiteId();
-  if (!siteId) redirect("/select-site");
+  if (!siteId) redirect("/auth/resolve-site");
 
   const role = await getUserSiteRole(user.id, siteId);
-  if (!role) redirect("/select-site");
+  if (!role) redirect("/auth/resolve-site");
 
   const admin = createAdminClient();
   const { data: profile } = await admin

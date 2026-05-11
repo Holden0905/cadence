@@ -19,10 +19,10 @@ export default async function PlatformLayout({
   if (!user) redirect("/login");
 
   const siteId = await getCurrentSiteId();
-  if (!siteId) redirect("/select-site");
+  if (!siteId) redirect("/auth/resolve-site");
 
   const role = await getUserSiteRole(user.id, siteId);
-  if (!role) redirect("/select-site");
+  if (!role) redirect("/auth/resolve-site");
 
   const admin = createAdminClient();
   const [{ data: profile }, { data: currentSite }] = await Promise.all([
@@ -31,7 +31,7 @@ export default async function PlatformLayout({
   ]);
 
   if (!profile) redirect("/login");
-  if (!currentSite || !currentSite.is_active) redirect("/select-site");
+  if (!currentSite || !currentSite.is_active) redirect("/auth/resolve-site");
 
   const memberships = await getUserMemberships(user.id);
 

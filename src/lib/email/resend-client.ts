@@ -25,9 +25,9 @@ export function formatWeekRange(start: string, end: string): string {
 }
 
 export function appBaseUrl(): string {
-  return (
-    process.env.NEXT_PUBLIC_APP_URL ??
-    process.env.VERCEL_URL?.replace(/^/, "https://") ??
-    "https://cadence.example.com"
-  );
+  // TEMPORARY: hardcoded production URL while we debug why
+  // NEXT_PUBLIC_APP_URL isn't resolving in Vercel.
+  // TODO: restore the env-var chain (NEXT_PUBLIC_APP_URL → VERCEL_URL
+  // → fallback) once the email links are confirmed working.
+  return "https://cadence-woad-two.vercel.app";
 }

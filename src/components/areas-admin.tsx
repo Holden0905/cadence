@@ -99,11 +99,23 @@ export function AreasAdmin({
   };
 
   const deleteArea = async (a: Area) => {
-    if (!confirm(`Delete "${a.name}" permanently? This will remove all related requirements and historical task data.`))
+    if (
+      !confirm(
+        `Delete "${a.name}" permanently? Only possible if no inspection requirements reference it — otherwise, deactivate it instead to preserve history.`,
+      )
+    )
       return;
     const { error } = await supabase.from("areas").delete().eq("id", a.id);
-    if (error) toast.error(error.message);
-    else {
+    if (error) {
+      const isFkBlock =
+        error.code === "23503" ||
+        /foreign key|violates|reference/i.test(error.message);
+      toast.error(
+        isFkBlock
+          ? `Can't delete "${a.name}" — it has historical requirements or tasks. Deactivate it instead to preserve history.`
+          : error.message,
+      );
+    } else {
       toast.success("Area deleted");
       router.refresh();
     }

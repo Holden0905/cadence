@@ -49,9 +49,11 @@ export type SiteUserRow = {
 export function UsersAdmin({
   users,
   callerIsSuperAdmin,
+  callerProfileId,
 }: {
   users: SiteUserRow[];
   callerIsSuperAdmin: boolean;
+  callerProfileId: string;
 }) {
   const router = useRouter();
   const [inviting, setInviting] = useState(false);
@@ -128,41 +130,61 @@ export function UsersAdmin({
                 </TableCell>
               </TableRow>
             ) : (
-              users.map((u) => (
-                <TableRow key={u.membershipId}>
-                  <TableCell className="font-medium">
-                    {u.profile.full_name || "—"}
-                  </TableCell>
-                  <TableCell>{u.profile.email}</TableCell>
-                  <TableCell>
-                    <Select
-                      value={u.role}
-                      onValueChange={(v) => setRole(u.membershipId, v as SiteRole)}
-                    >
-                      <SelectTrigger className="w-40">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="inspector">Inspector</SelectItem>
-                        <SelectItem value="site_admin">Site admin</SelectItem>
-                        {callerIsSuperAdmin && (
-                          <SelectItem value="super_admin">
-                            Super admin
-                          </SelectItem>
-                        )}
-                      </SelectContent>
-                    </Select>
-                  </TableCell>
-                  <TableCell>
-                    <Switch
-                      checked={u.isActive}
-                      onCheckedChange={() =>
-                        toggleActive(u.membershipId, u.isActive)
-                      }
-                    />
-                  </TableCell>
-                </TableRow>
-              ))
+              users.map((u) => {
+                const isSelf = u.profile.id === callerProfileId;
+                return (
+                  <TableRow key={u.membershipId}>
+                    <TableCell className="font-medium">
+                      {u.profile.full_name || "—"}
+                      {isSelf && (
+                        <span className="ml-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                          You
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell>{u.profile.email}</TableCell>
+                    <TableCell>
+                      <Select
+                        value={u.role}
+                        onValueChange={(v) =>
+                          setRole(u.membershipId, v as SiteRole)
+                        }
+                      >
+                        <SelectTrigger className="w-40">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="inspector">Inspector</SelectItem>
+                          <SelectItem value="site_admin">Site admin</SelectItem>
+                          {callerIsSuperAdmin && (
+                            <SelectItem value="super_admin">
+                              Super admin
+                            </SelectItem>
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+                    <TableCell>
+                      <span
+                        title={
+                          isSelf
+                            ? "You cannot deactivate your own account."
+                            : undefined
+                        }
+                        className={isSelf ? "cursor-not-allowed" : ""}
+                      >
+                        <Switch
+                          checked={u.isActive}
+                          disabled={isSelf}
+                          onCheckedChange={() =>
+                            toggleActive(u.membershipId, u.isActive)
+                          }
+                        />
+                      </span>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
             )}
           </TableBody>
         </Table>

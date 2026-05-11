@@ -7,7 +7,7 @@ import type { Profile, SiteRole } from "@/lib/types";
 export const dynamic = "force-dynamic";
 
 export default async function AdminUsersPage() {
-  const { siteId, role } = await requireSiteAdmin();
+  const { siteId, role, user } = await requireSiteAdmin();
   const admin = createAdminClient();
 
   const { data: rows } = await admin
@@ -46,6 +46,7 @@ export default async function AdminUsersPage() {
       <UsersAdmin
         users={users}
         callerIsSuperAdmin={isSuperAdminRole(role)}
+        callerProfileId={user.id}
       />
     </div>
   );

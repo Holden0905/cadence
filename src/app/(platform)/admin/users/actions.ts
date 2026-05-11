@@ -177,11 +177,16 @@ export async function toggleUserSiteActiveAction(
   const admin = createAdminClient();
   const { data: membership } = await admin
     .from("user_sites")
-    .select("site_id")
+    .select("site_id, profile_id")
     .eq("id", membershipId)
-    .maybeSingle<{ site_id: string }>();
+    .maybeSingle<{ site_id: string; profile_id: string }>();
   if (!membership) return { error: "Membership not found" };
   if (membership.site_id !== siteId) return { error: "Wrong site" };
+
+  // Defense in depth: never let a user deactivate their own membership
+  if (membership.profile_id === user.id && !isActive) {
+    return { error: "You cannot deactivate your own account" };
+  }
 
   const { error } = await admin
     .from("user_sites")

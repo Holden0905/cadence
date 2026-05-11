@@ -391,12 +391,12 @@ function OwnersDialog({
               value={selectedProfile}
               onValueChange={setSelectedProfile}
             >
-              {/* Trigger renders its own single-line truncated label so a
-                  long-named selection can't push the trigger wider than
-                  its column. We bypass SelectValue's default echo of
-                  whatever's in the matching SelectItem. */}
+              {/* w-full overrides shadcn's default w-fit so the trigger
+                  fills its flex column instead of sizing to content.
+                  overflow-hidden + the truncating inner span keep long
+                  names from spilling out. */}
               <SelectTrigger
-                className="flex-1 min-w-0 basis-[14rem] max-w-full overflow-hidden"
+                className="w-full max-w-full overflow-hidden flex-1 basis-[14rem] min-w-0"
               >
                 <SelectedOwnerLabel
                   profile={
@@ -406,8 +406,16 @@ function OwnersDialog({
                   }
                 />
               </SelectTrigger>
+              {/* position="popper" anchors the dropdown to the trigger.
+                  The default "item-aligned" tries to align to the
+                  selected SelectItem — since we bypass SelectValue,
+                  Radix can't find the match and falls back to viewport
+                  origin (top-left). */}
               <SelectContent
-                className="w-[var(--radix-select-trigger-width)] max-w-[min(20rem,calc(100vw-2rem))]"
+                position="popper"
+                align="start"
+                sideOffset={4}
+                className="w-[min(20rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)]"
               >
                 {availableProfiles.length === 0 ? (
                   <div className="px-2 py-1.5 text-sm text-muted-foreground">
@@ -482,9 +490,13 @@ function OwnersDialog({
  * to expand to accommodate multi-line item content.
  */
 function SelectedOwnerLabel({ profile }: { profile?: Profile }) {
+  // flex-1 + min-w-0 lets the span shrink below content width inside
+  // the trigger's flex row; truncate provides the ellipsis. block alone
+  // wouldn't truncate inside the trigger because Radix's trigger is a
+  // flex container — the span needs flex semantics to shrink.
   if (!profile) {
     return (
-      <span className="block w-full truncate text-left text-muted-foreground">
+      <span className="flex-1 min-w-0 truncate text-left text-muted-foreground">
         Select user
       </span>
     );
@@ -492,7 +504,7 @@ function SelectedOwnerLabel({ profile }: { profile?: Profile }) {
   const label = profile.full_name || profile.email;
   return (
     <span
-      className="block w-full truncate text-left"
+      className="flex-1 min-w-0 truncate text-left"
       title={label}
     >
       {label}

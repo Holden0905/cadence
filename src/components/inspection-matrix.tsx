@@ -25,7 +25,6 @@ type Props = {
   documents: DocumentRow[];
   owners: AreaRequirementOwner[];
   profiles: Profile[];
-  readOnly?: boolean;
 };
 
 export function InspectionMatrix({
@@ -37,7 +36,6 @@ export function InspectionMatrix({
   documents,
   owners,
   profiles,
-  readOnly = false,
 }: Props) {
   const matrix = useMemo(
     () =>
@@ -74,7 +72,6 @@ export function InspectionMatrix({
     if (!area || !type) return;
 
     if (cell.task.status === "pending") {
-      if (readOnly) return;
       setUploadCell({
         taskId: cell.task.id,
         areaName: area.name,
@@ -126,7 +123,6 @@ export function InspectionMatrix({
                       <CellButton
                         cell={cell}
                         onClick={() => handleCellClick(a.id, t.id)}
-                        disabled={readOnly && cell.kind === "task" && cell.task.status === "pending"}
                       />
                     </td>
                   );
@@ -165,11 +161,9 @@ export function InspectionMatrix({
 function CellButton({
   cell,
   onClick,
-  disabled,
 }: {
   cell: ReturnType<typeof getCell>;
   onClick: () => void;
-  disabled?: boolean;
 }) {
   if (cell.kind === "na") {
     return (
@@ -196,9 +190,8 @@ function CellButton({
     <button
       type="button"
       onClick={onClick}
-      disabled={disabled}
       className={cn(
-        "inline-flex items-center justify-center w-full h-9 rounded transition cursor-pointer disabled:cursor-not-allowed disabled:opacity-60",
+        "inline-flex items-center justify-center w-full h-9 rounded transition cursor-pointer",
         styles[status],
       )}
       title={`${statusLabel(status)} (click to ${

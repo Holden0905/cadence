@@ -14,13 +14,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { FileText, Check, Loader2 } from "lucide-react";
+import { FileText, Check, Loader2, History as HistoryIcon } from "lucide-react";
 import { toast } from "sonner";
-import { formatDateTime } from "@/lib/dates";
+import { formatDateTime, formatWeekRange } from "@/lib/dates";
 import type {
   Area,
   AreaRequirement,
   DocumentRow,
+  InspectionCycle,
   InspectionTask,
   InspectionType,
   Profile,
@@ -32,6 +33,8 @@ type SubmittedItem = {
   inspectionType: InspectionType;
   submitter: Profile | null;
   documents: DocumentRow[];
+  cycle: InspectionCycle;
+  isPastWeek: boolean;
 };
 
 type Props = {
@@ -197,7 +200,19 @@ export function ReviewList({ items }: Props) {
                   ({it.inspectionType.abbreviation})
                 </span>
               </p>
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1.5 flex-wrap">
+                <span>
+                  Week of{" "}
+                  {formatWeekRange(it.cycle.week_start, it.cycle.week_end)}
+                </span>
+                {it.isPastWeek && (
+                  <span className="inline-flex items-center gap-0.5 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider">
+                    <HistoryIcon className="size-2.5" />
+                    Past
+                  </span>
+                )}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
                 Submitted by{" "}
                 <strong>
                   {it.submitter?.full_name || it.submitter?.email || "—"}

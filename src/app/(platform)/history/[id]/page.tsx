@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, History as HistoryIcon } from "lucide-react";
 import { InspectionMatrix } from "@/components/inspection-matrix";
 import { formatWeekRange, formatDateTime } from "@/lib/dates";
 import { requireSiteContext } from "@/lib/admin-guard";
@@ -19,6 +19,13 @@ import type {
 } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
+
+function isPastWeek(weekEndIso: string): boolean {
+  const todayMidnight = new Date();
+  todayMidnight.setHours(0, 0, 0, 0);
+  const weekEnd = new Date(weekEndIso + "T00:00:00");
+  return weekEnd < todayMidnight;
+}
 
 export default async function HistoryDetailPage({
   params,
@@ -75,6 +82,7 @@ export default async function HistoryDetailPage({
 
   const total = taskList.length;
   const approved = taskList.filter((t) => t.status === "approved").length;
+  const past = isPastWeek(cycle.week_end);
 
   return (
     <div className="px-8 py-8 max-w-7xl">
@@ -89,22 +97,31 @@ export default async function HistoryDetailPage({
 
       <div className="mb-6 flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-2xl font-semibold">
-            Week of {formatWeekRange(cycle.week_start, cycle.week_end)}
-          </h1>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="text-2xl font-semibold">
+              Week of {formatWeekRange(cycle.week_start, cycle.week_end)}
+            </h1>
+            {past && (
+              <Badge variant="secondary" className="gap-1">
+                <HistoryIcon className="size-3" />
+                Past week
+              </Badge>
+            )}
+          </div>
           <p className="text-sm text-muted-foreground mt-1">
             {approved} of {total} approved
             {cycle.completed_at && (
               <> · completed {formatDateTime(cycle.completed_at)}</>
             )}
           </p>
+          {past && (
+            <p className="text-xs text-muted-foreground mt-2 max-w-xl">
+              This is a past inspection week. You can still upload documents
+              and admins can still approve submissions — useful for late
+              entries or corrections.
+            </p>
+          )}
         </div>
-        <Badge
-          variant={cycle.status === "active" ? "default" : "secondary"}
-          className="capitalize"
-        >
-          {cycle.status}
-        </Badge>
       </div>
 
       <InspectionMatrix
@@ -116,7 +133,6 @@ export default async function HistoryDetailPage({
         documents={documents}
         owners={(owners ?? []) as AreaRequirementOwner[]}
         profiles={(profiles ?? []) as Profile[]}
-        readOnly
       />
     </div>
   );

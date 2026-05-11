@@ -1,6 +1,5 @@
 import { createClient } from "@/utils/supabase/server";
 import { ReviewList } from "@/components/review-list";
-import { formatWeekRange } from "@/lib/dates";
 import { requireSiteAdmin } from "@/lib/admin-guard";
 import type {
   Area,
@@ -14,33 +13,44 @@ import type {
 
 export const dynamic = "force-dynamic";
 
+function isPastWeek(weekEndIso: string): boolean {
+  const todayMidnight = new Date();
+  todayMidnight.setHours(0, 0, 0, 0);
+  const weekEnd = new Date(weekEndIso + "T00:00:00");
+  return weekEnd < todayMidnight;
+}
+
 export default async function ReviewPage() {
   const { siteId } = await requireSiteAdmin();
   const supabase = await createClient();
 
-  const { data: cycle } = await supabase
+  // All cycles for this site (we'll need each cycle's week range for the
+  // item label)
+  const { data: cycles } = await supabase
     .from("inspection_cycles")
     .select("*")
-    .eq("site_id", siteId)
-    .order("week_start", { ascending: false })
-    .limit(1)
-    .maybeSingle<InspectionCycle>();
+    .eq("site_id", siteId);
 
-  if (!cycle) {
+  const cycleList = (cycles ?? []) as InspectionCycle[];
+  if (cycleList.length === 0) {
     return (
       <div className="px-8 py-10">
         <h1 className="text-2xl font-semibold mb-2">Review</h1>
-        <p className="text-muted-foreground">No active cycle for this site.</p>
+        <p className="text-muted-foreground">No cycles for this site yet.</p>
       </div>
     );
   }
+  const cycleIds = cycleList.map((c) => c.id);
+  const cycleById = new Map(cycleList.map((c) => [c.id, c]));
 
+  // Submitted tasks across ALL cycles of this site (past + current),
+  // most recently submitted first.
   const { data: submittedTasks } = await supabase
     .from("inspection_tasks")
     .select("*")
-    .eq("cycle_id", cycle.id)
+    .in("cycle_id", cycleIds)
     .eq("status", "submitted")
-    .order("submitted_at", { ascending: true });
+    .order("submitted_at", { ascending: false });
 
   const taskList = (submittedTasks ?? []) as InspectionTask[];
 
@@ -89,7 +99,8 @@ export default async function ReviewPage() {
   const items = taskList
     .map((task) => {
       const req = reqById.get(task.area_requirement_id);
-      if (!req) return null;
+      const cycle = cycleById.get(task.cycle_id);
+      if (!req || !cycle) return null;
       const area = areaById.get(req.area_id);
       const type = typeById.get(req.inspection_type_id);
       if (!area || !type) return null;
@@ -101,17 +112,23 @@ export default async function ReviewPage() {
           ? submitterById.get(task.submitted_by) ?? null
           : null,
         documents: docsByTask.get(task.id) ?? [],
+        cycle,
+        isPastWeek: isPastWeek(cycle.week_end),
       };
     })
     .filter((x): x is NonNullable<typeof x> => x !== null);
+
+  const pastCount = items.filter((i) => i.isPastWeek).length;
 
   return (
     <div className="px-8 py-8 max-w-5xl">
       <div className="mb-6">
         <h1 className="text-2xl font-semibold">Review submissions</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Week of {formatWeekRange(cycle.week_start, cycle.week_end)} ·{" "}
-          {items.length} awaiting review
+          {items.length} awaiting review across all weeks
+          {pastCount > 0 && (
+            <> · {pastCount} from past weeks</>
+          )}
         </p>
       </div>
 

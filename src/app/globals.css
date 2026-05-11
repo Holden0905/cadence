@@ -37,6 +37,12 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  /* Stepan brand red — used for toggle "on" state and accent surfaces */
+  --color-brand: #c8102e;
+  --color-brand-foreground: #ffffff;
+  /* Neutral gray used for toggle "off" state, meets 3:1 contrast on white */
+  --color-toggle-off: #6b7280;
+  --color-toggle-off-dark: #9ca3af;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);

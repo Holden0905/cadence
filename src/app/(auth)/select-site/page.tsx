@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import Image from "next/image";
 import { createClient } from "@/utils/supabase/server";
-import { getUserMemberships, setCurrentSiteId } from "@/lib/site-context";
+import { getUserMemberships } from "@/lib/site-context";
 import { SiteCardList } from "./site-cards";
 
 export const dynamic = "force-dynamic";
@@ -35,10 +35,7 @@ export default async function SelectSitePage() {
     );
   }
 
-  if (memberships.length === 1) {
-    await setCurrentSiteId(memberships[0].site.id);
-    redirect("/dashboard");
-  }
+  const singleSite = memberships.length === 1;
 
   return (
     <div className="w-full max-w-2xl">
@@ -51,10 +48,13 @@ export default async function SelectSitePage() {
           priority
           className="mx-auto mb-3"
         />
-        <h1 className="text-2xl font-semibold">Select a site</h1>
+        <h1 className="text-2xl font-semibold">
+          {singleSite ? "Continue to Cadence" : "Select a site"}
+        </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          You have access to {memberships.length} sites. Choose one to
-          continue.
+          {singleSite
+            ? "Click your site to continue."
+            : `You have access to ${memberships.length} sites. Choose one to continue.`}
         </p>
       </div>
       <SiteCardList memberships={memberships} />

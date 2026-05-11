@@ -352,17 +352,17 @@ function OwnersDialog({
                 >
                   <div className="min-w-0 flex-1 overflow-hidden">
                     <p
-                      className="text-sm font-medium truncate"
+                      className="text-sm font-medium"
                       title={name}
                     >
-                      {name}
+                      {clipName(name)}
                     </p>
                     {p?.email && (
                       <p
-                        className="text-xs text-muted-foreground truncate"
+                        className="text-xs text-muted-foreground"
                         title={p.email}
                       >
-                        {p.email}
+                        {clipName(p.email)}
                       </p>
                     )}
                     <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mt-0.5">
@@ -428,19 +428,19 @@ function OwnersDialog({
                       value={p.id}
                       className="py-1.5"
                     >
-                      <div className="flex flex-col items-start gap-0.5 min-w-0 max-w-full overflow-hidden">
+                      <div className="flex flex-col items-start gap-0.5">
                         <span
-                          className="block w-full font-medium truncate"
+                          className="font-medium"
                           title={p.full_name ?? p.email}
                         >
-                          {p.full_name || p.email}
+                          {clipName(p.full_name || p.email)}
                         </span>
                         {p.full_name && (
                           <span
-                            className="block w-full text-xs text-muted-foreground truncate"
+                            className="text-xs text-muted-foreground"
                             title={p.email}
                           >
-                            {p.email}
+                            {clipName(p.email)}
                           </span>
                         )}
                       </div>
@@ -489,25 +489,26 @@ function OwnersDialog({
  * SelectItem's full ReactNode children — that would force the trigger
  * to expand to accommodate multi-line item content.
  */
+/** JS-side name clip. Used everywhere names render in the owner UI so
+ *  the data is already short before any layout/CSS gets involved. */
+const MAX_NAME_DISPLAY = 25;
+function clipName(value: string | null | undefined): string {
+  const s = value ?? "";
+  return s.length > MAX_NAME_DISPLAY
+    ? s.slice(0, MAX_NAME_DISPLAY) + "..."
+    : s;
+}
+
 function SelectedOwnerLabel({ profile }: { profile?: Profile }) {
-  // flex-1 + min-w-0 lets the span shrink below content width inside
-  // the trigger's flex row; truncate provides the ellipsis. block alone
-  // wouldn't truncate inside the trigger because Radix's trigger is a
-  // flex container — the span needs flex semantics to shrink.
   if (!profile) {
     return (
-      <span className="flex-1 min-w-0 truncate text-left text-muted-foreground">
-        Select user
-      </span>
+      <span className="text-left text-muted-foreground">Select user</span>
     );
   }
-  const label = profile.full_name || profile.email;
+  const full = profile.full_name || profile.email;
   return (
-    <span
-      className="flex-1 min-w-0 truncate text-left"
-      title={label}
-    >
-      {label}
+    <span className="text-left" title={full}>
+      {clipName(full)}
     </span>
   );
 }

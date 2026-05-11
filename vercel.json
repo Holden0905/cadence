@@ -1,0 +1,17 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    {
+      "path": "/api/cron/create-cycle",
+      "schedule": "0 11 * * 0"
+    },
+    {
+      "path": "/api/cron/send-nudge",
+      "schedule": "0 14 * * 3"
+    },
+    {
+      "path": "/api/cron/send-summary",
+      "schedule": "0 19 * * 4"
+    }
+  ]
+}

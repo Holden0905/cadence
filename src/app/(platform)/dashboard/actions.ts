@@ -3,9 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
-import type { SiteRole } from "@/lib/types";
+import { requireSuperAdmin } from "@/lib/admin-guard";
+import { sendSummaryForSite } from "@/lib/email/send-summary-for-site";
+import type { Site, SiteRole } from "@/lib/types";
 
 export type DeleteDocumentResult = { ok: true } | { error: string };
+export type TestSummaryResult =
+  | { ok: true; recipients: number; reason?: string; status: string }
+  | { error: string };
 
 export async function deleteDocumentAction(
   documentId: string,
@@ -106,4 +111,37 @@ export async function deleteDocumentAction(
   revalidatePath("/dashboard");
   revalidatePath("/review");
   return { ok: true };
+}
+
+/**
+ * Super-admin only: send the weekly summary email for the current site
+ * immediately, with a "[TEST]" subject prefix so recipients know it
+ * isn't the Thursday automation.
+ */
+export async function sendTestSummaryAction(): Promise<TestSummaryResult> {
+  const { siteId } = await requireSuperAdmin();
+  const admin = createAdminClient();
+
+  const { data: site } = await admin
+    .from("sites")
+    .select("*")
+    .eq("id", siteId)
+    .maybeSingle<Site>();
+  if (!site) return { error: "Current site not found" };
+
+  const result = await sendSummaryForSite(site, {
+    subjectPrefix: "[TEST] ",
+  });
+
+  if (result.status === "no-active-cycle")
+    return { error: "No active cycle for this site yet" };
+  if (result.status === "no-recipients")
+    return { error: "No active recipients configured for this site" };
+
+  return {
+    ok: true,
+    recipients: result.recipients ?? 0,
+    status: result.status,
+    reason: result.reason,
+  };
 }

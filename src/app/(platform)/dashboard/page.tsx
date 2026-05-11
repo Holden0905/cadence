@@ -2,8 +2,10 @@ import { createClient } from "@/utils/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { InspectionMatrix } from "@/components/inspection-matrix";
+import { TestSummaryButton } from "@/components/test-summary-button";
 import { formatWeekRange, daysRemaining } from "@/lib/dates";
 import { requireSiteContext } from "@/lib/admin-guard";
+import { isSuperAdminRole } from "@/lib/site-context";
 import type {
   Area,
   AreaRequirement,
@@ -18,8 +20,9 @@ import type {
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  const { siteId } = await requireSiteContext();
+  const { siteId, role } = await requireSiteContext();
   const supabase = await createClient();
+  const isSuper = isSuperAdminRole(role);
 
   const { data: cycle } = await supabase
     .from("inspection_cycles")
@@ -93,12 +96,15 @@ export default async function DashboardPage() {
             Week of {formatWeekRange(cycle.week_start, cycle.week_end)}
           </p>
         </div>
-        <Badge
-          variant={cycle.status === "active" ? "default" : "secondary"}
-          className="capitalize"
-        >
-          {cycle.status}
-        </Badge>
+        <div className="flex items-center gap-2">
+          {isSuper && <TestSummaryButton />}
+          <Badge
+            variant={cycle.status === "active" ? "default" : "secondary"}
+            className="capitalize"
+          >
+            {cycle.status}
+          </Badge>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">

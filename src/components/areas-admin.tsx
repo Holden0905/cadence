@@ -24,7 +24,13 @@ import {
 import { Card } from "@/components/ui/card";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { isPositiveInteger } from "@/lib/validation";
 import type { Area } from "@/lib/types";
+
+function suggestNextSortOrder(areas: Area[]): number {
+  if (areas.length === 0) return 1;
+  return Math.max(...areas.map((a) => a.sort_order)) + 1;
+}
 
 export function AreasAdmin({
   areas,
@@ -38,14 +44,14 @@ export function AreasAdmin({
   const [creating, setCreating] = useState(false);
   const [draft, setDraft] = useState<{ name: string; sort_order: number }>({
     name: "",
-    sort_order: areas.length + 1,
+    sort_order: suggestNextSortOrder(areas),
   });
   const [busy, setBusy] = useState(false);
 
   const supabase = createClient();
 
   const openCreate = () => {
-    setDraft({ name: "", sort_order: areas.length + 1 });
+    setDraft({ name: "", sort_order: suggestNextSortOrder(areas) });
     setCreating(true);
   };
 
@@ -54,13 +60,33 @@ export function AreasAdmin({
     setEditing(a);
   };
 
+  const validateDraft = (): string | null => {
+    const name = draft.name.trim();
+    if (!name) return "Name is required";
+    if (!isPositiveInteger(draft.sort_order))
+      return "Sort order must be a positive integer";
+    const conflict = areas.find(
+      (a) =>
+        a.sort_order === draft.sort_order &&
+        (!editing || a.id !== editing.id),
+    );
+    if (conflict)
+      return `Sort order ${draft.sort_order} is already used by "${conflict.name}"`;
+    return null;
+  };
+
   const save = async () => {
+    const err = validateDraft();
+    if (err) {
+      toast.error(err);
+      return;
+    }
     setBusy(true);
     if (editing) {
       const { error } = await supabase
         .from("areas")
         .update({
-          name: draft.name,
+          name: draft.name.trim(),
           sort_order: draft.sort_order,
           updated_at: new Date().toISOString(),
         })
@@ -72,7 +98,7 @@ export function AreasAdmin({
       }
     } else {
       const { error } = await supabase.from("areas").insert({
-        name: draft.name,
+        name: draft.name.trim(),
         sort_order: draft.sort_order,
         site_id: siteId,
       });
@@ -201,6 +227,8 @@ export function AreasAdmin({
               <label className="text-sm font-medium">Sort order</label>
               <Input
                 type="number"
+                min={1}
+                step={1}
                 value={draft.sort_order}
                 onChange={(e) =>
                   setDraft({
@@ -209,6 +237,9 @@ export function AreasAdmin({
                   })
                 }
               />
+              <p className="text-xs text-muted-foreground mt-1">
+                Positive integer, unique within this site.
+              </p>
             </div>
           </div>
           <DialogFooter>
@@ -222,7 +253,7 @@ export function AreasAdmin({
             >
               Cancel
             </Button>
-            <Button onClick={save} disabled={busy || !draft.name}>
+            <Button onClick={save} disabled={busy || !draft.name.trim()}>
               Save
             </Button>
           </DialogFooter>

@@ -155,6 +155,14 @@ export default function LoginPage() {
             {signingIn && <Loader2 className="size-4 animate-spin" />}
             Sign in
           </Button>
+          <p className="text-right">
+            <Link
+              href="/forgot-password"
+              className="text-xs text-muted-foreground hover:text-foreground hover:underline"
+            >
+              Forgot password?
+            </Link>
+          </p>
         </form>
 
         <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground">

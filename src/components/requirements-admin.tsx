@@ -233,21 +233,48 @@ function OwnersDialog({
   const addOwner = async () => {
     if (!selectedProfile) return;
     setBusy(true);
-    const { error } = await supabase
-      .from("area_requirement_owners")
-      .insert({
-        area_requirement_id: requirement.id,
-        profile_id: selectedProfile,
-        owner_role: selectedRole,
-      });
+
+    // Enforce single primary per requirement: if adding a primary,
+    // demote any existing primary at this requirement to backup first.
+    if (selectedRole === "primary") {
+      const { error: demoteError } = await supabase
+        .from("area_requirement_owners")
+        .update({ owner_role: "backup" })
+        .eq("area_requirement_id", requirement.id)
+        .eq("owner_role", "primary");
+      if (demoteError) {
+        setBusy(false);
+        toast.error(demoteError.message);
+        return;
+      }
+    }
+
+    const { error } = await supabase.from("area_requirement_owners").insert({
+      area_requirement_id: requirement.id,
+      profile_id: selectedProfile,
+      owner_role: selectedRole,
+    });
     setBusy(false);
     if (error) toast.error(error.message);
     else {
-      toast.success("Owner added");
+      toast.success(
+        selectedRole === "primary"
+          ? "Primary owner set (previous primary demoted to backup)"
+          : "Backup owner added",
+      );
       setSelectedProfile("");
       onChanged();
     }
   };
+
+  // Sort: primary first, then backups, then by display name.
+  const sortedOwners = [...owners].sort((a, b) => {
+    if (a.owner_role !== b.owner_role)
+      return a.owner_role === "primary" ? -1 : 1;
+    const an = profileById.get(a.profile_id)?.full_name ?? "";
+    const bn = profileById.get(b.profile_id)?.full_name ?? "";
+    return an.localeCompare(bn);
+  });
 
   const removeOwner = async (id: string) => {
     setBusy(true);
@@ -280,12 +307,12 @@ function OwnersDialog({
         </DialogHeader>
 
         <div className="space-y-2 max-h-60 overflow-y-auto">
-          {owners.length === 0 ? (
+          {sortedOwners.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-4">
               No owners assigned yet.
             </p>
           ) : (
-            owners.map((o) => {
+            sortedOwners.map((o) => {
               const p = profileById.get(o.profile_id);
               return (
                 <div

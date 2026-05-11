@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { isValidEmail, normalizeEmail } from "@/lib/validation";
 import type { Recipient } from "@/lib/types";
 
 export function RecipientsAdmin({
@@ -50,11 +51,16 @@ export function RecipientsAdmin({
   };
 
   const save = async () => {
+    if (!isValidEmail(draft.email)) {
+      toast.error("Enter a valid email address");
+      return;
+    }
+    const cleanEmail = normalizeEmail(draft.email);
     setBusy(true);
     if (editing) {
       const { error } = await supabase
         .from("recipients")
-        .update({ email: draft.email, full_name: draft.full_name || null })
+        .update({ email: cleanEmail, full_name: draft.full_name.trim() || null })
         .eq("id", editing.id);
       if (error) toast.error(error.message);
       else {
@@ -63,8 +69,8 @@ export function RecipientsAdmin({
       }
     } else {
       const { error } = await supabase.from("recipients").insert({
-        email: draft.email,
-        full_name: draft.full_name || null,
+        email: cleanEmail,
+        full_name: draft.full_name.trim() || null,
         site_id: siteId,
       });
       if (error) toast.error(error.message);

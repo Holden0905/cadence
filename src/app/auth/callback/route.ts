@@ -8,11 +8,18 @@ import {
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
+  const next = searchParams.get("next");
 
   if (code) {
     const supabase = await createClient();
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error && data.user) {
+      // If the caller asked us to land on a specific in-app path
+      // (e.g. /auth/update-password from a recovery link), honor it
+      // instead of running the site-resolution flow.
+      if (next && next.startsWith("/")) {
+        return NextResponse.redirect(`${origin}${next}`);
+      }
       const memberships = await getUserMemberships(data.user.id);
       if (memberships.length === 1) {
         await setCurrentSiteId(memberships[0].site.id);

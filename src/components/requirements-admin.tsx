@@ -325,8 +325,8 @@ function OwnersDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent>
-        <DialogHeader>
+      <DialogContent className="max-w-md w-[calc(100vw-2rem)] overflow-hidden">
+        <DialogHeader className="min-w-0">
           <DialogTitle>
             Owners — {area.name} · {type.abbreviation}
           </DialogTitle>
@@ -350,7 +350,7 @@ function OwnersDialog({
                   key={o.id}
                   className="flex items-center justify-between gap-2 border rounded px-3 py-2"
                 >
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-0 flex-1 overflow-hidden">
                     <p
                       className="text-sm font-medium truncate"
                       title={name}
@@ -391,10 +391,24 @@ function OwnersDialog({
               value={selectedProfile}
               onValueChange={setSelectedProfile}
             >
-              <SelectTrigger className="flex-1 min-w-[200px] h-auto py-2">
-                <SelectValue placeholder="Select user" />
+              {/* Trigger renders its own single-line truncated label so a
+                  long-named selection can't push the trigger wider than
+                  its column. We bypass SelectValue's default echo of
+                  whatever's in the matching SelectItem. */}
+              <SelectTrigger
+                className="flex-1 min-w-0 basis-[14rem] max-w-full overflow-hidden"
+              >
+                <SelectedOwnerLabel
+                  profile={
+                    selectedProfile
+                      ? profileById.get(selectedProfile)
+                      : undefined
+                  }
+                />
               </SelectTrigger>
-              <SelectContent className="max-w-[min(28rem,calc(100vw-2rem))]">
+              <SelectContent
+                className="w-[var(--radix-select-trigger-width)] max-w-[min(20rem,calc(100vw-2rem))]"
+              >
                 {availableProfiles.length === 0 ? (
                   <div className="px-2 py-1.5 text-sm text-muted-foreground">
                     All active users assigned
@@ -406,16 +420,16 @@ function OwnersDialog({
                       value={p.id}
                       className="py-1.5"
                     >
-                      <div className="flex flex-col items-start gap-0.5 min-w-0">
+                      <div className="flex flex-col items-start gap-0.5 min-w-0 max-w-full overflow-hidden">
                         <span
-                          className="font-medium truncate max-w-[22rem]"
+                          className="block w-full font-medium truncate"
                           title={p.full_name ?? p.email}
                         >
                           {p.full_name || p.email}
                         </span>
                         {p.full_name && (
                           <span
-                            className="text-xs text-muted-foreground truncate max-w-[22rem]"
+                            className="block w-full text-xs text-muted-foreground truncate"
                             title={p.email}
                           >
                             {p.email}
@@ -458,5 +472,30 @@ function OwnersDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * Single-line truncated label rendered inside the owner SelectTrigger.
+ * Bypasses Radix's SelectValue, which by default echoes the matching
+ * SelectItem's full ReactNode children — that would force the trigger
+ * to expand to accommodate multi-line item content.
+ */
+function SelectedOwnerLabel({ profile }: { profile?: Profile }) {
+  if (!profile) {
+    return (
+      <span className="block w-full truncate text-left text-muted-foreground">
+        Select user
+      </span>
+    );
+  }
+  const label = profile.full_name || profile.email;
+  return (
+    <span
+      className="block w-full truncate text-left"
+      title={label}
+    >
+      {label}
+    </span>
   );
 }

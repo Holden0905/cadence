@@ -462,18 +462,24 @@ export function UsersAdmin({
         open={!!deleting}
         onOpenChange={(open) => !busy && !open && setDeleting(null)}
       >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
+        <DialogContent className="max-w-md w-[calc(100vw-2rem)] overflow-hidden">
+          <DialogHeader className="min-w-0">
             <DialogTitle>Remove from this site?</DialogTitle>
             <DialogDescription asChild>
-              <div className="space-y-2">
-                <p className="font-medium text-foreground truncate" title={
-                  deleting?.profile.full_name || deleting?.profile.email
-                }>
+              <div className="space-y-2 min-w-0 max-w-full">
+                <p
+                  className="font-medium text-foreground break-words"
+                  title={
+                    deleting?.profile.full_name || deleting?.profile.email
+                  }
+                >
                   {deleting?.profile.full_name || deleting?.profile.email}
                 </p>
                 {deleting?.profile.full_name && (
-                  <p className="text-xs text-muted-foreground truncate" title={deleting.profile.email}>
+                  <p
+                    className="text-xs text-muted-foreground break-all"
+                    title={deleting.profile.email}
+                  >
                     {deleting.profile.email}
                   </p>
                 )}

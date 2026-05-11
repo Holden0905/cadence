@@ -15,6 +15,8 @@ import type {
   Site,
 } from "@/lib/types";
 
+export type SummaryKind = "weekly" | "completion";
+
 export type SummaryResult = {
   site: string;
   status: "sent" | "partial" | "skipped" | "no-active-cycle" | "no-recipients";
@@ -74,19 +76,30 @@ function renderMatrix(
 
 export async function sendSummaryForSite(
   site: Site,
-  opts: { subjectPrefix?: string } = {},
+  opts: {
+    subjectPrefix?: string;
+    /** When omitted, the currently-active cycle is used. */
+    cycle?: InspectionCycle;
+    /** Affects subject line + intro copy. */
+    kind?: SummaryKind;
+  } = {},
 ): Promise<SummaryResult> {
   const admin = createAdminClient();
   const resend = getResend();
+  const kind: SummaryKind = opts.kind ?? "weekly";
 
-  const { data: cycle } = await admin
-    .from("inspection_cycles")
-    .select("*")
-    .eq("site_id", site.id)
-    .eq("status", "active")
-    .order("week_start", { ascending: false })
-    .limit(1)
-    .maybeSingle<InspectionCycle>();
+  let cycle: InspectionCycle | null = opts.cycle ?? null;
+  if (!cycle) {
+    const { data } = await admin
+      .from("inspection_cycles")
+      .select("*")
+      .eq("site_id", site.id)
+      .eq("status", "active")
+      .order("week_start", { ascending: false })
+      .limit(1)
+      .maybeSingle<InspectionCycle>();
+    cycle = data ?? null;
+  }
 
   if (!cycle) return { site: site.name, status: "no-active-cycle" };
 
@@ -139,16 +152,28 @@ export async function sendSummaryForSite(
   const matrixHtml = renderMatrix(areas, types, reqByAreaType, taskByReq);
   const appUrl = appBaseUrl();
 
+  const headline =
+    kind === "completion"
+      ? "Cadence — Completed Inspection Report"
+      : "Cadence — Weekly Inspection Status";
+
+  const intro =
+    kind === "completion"
+      ? `<p style="margin:0 0 16px;color:#15803d;font-weight:500;">
+          All <strong>${total}</strong> inspections for the week of <strong>${weekRange}</strong> have been approved.
+        </p>`
+      : `<p style="margin:0 0 16px;">
+          <strong>${approved}</strong> of <strong>${total}</strong> inspections approved.
+          ${submitted > 0 ? `<span style="color:#854d0e;">⧳ ${submitted} submitted, awaiting review.</span>` : ""}
+          ${pending > 0 ? `<span style="color:#b91c1c;">✗ ${pending} pending.</span>` : ""}
+        </p>`;
+
   const html = `
     <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:900px;padding:24px;color:#1a1a1a;">
-      <h2 style="margin:0 0 8px;">Cadence — Weekly Inspection Status</h2>
+      <h2 style="margin:0 0 8px;">${headline}</h2>
       <p style="margin:0 0 4px;color:#4b5563;"><strong>${site.name}</strong>${site.location ? " — " + site.location : ""}</p>
       <p style="margin:0 0 24px;color:#4b5563;">Week of <strong>${weekRange}</strong></p>
-      <p style="margin:0 0 16px;">
-        <strong>${approved}</strong> of <strong>${total}</strong> inspections approved.
-        ${submitted > 0 ? `<span style="color:#854d0e;">⧳ ${submitted} submitted, awaiting review.</span>` : ""}
-        ${pending > 0 ? `<span style="color:#b91c1c;">✗ ${pending} pending.</span>` : ""}
-      </p>
+      ${intro}
       ${matrixHtml}
       <p style="margin:20px 0 0;">
         <a href="${appUrl}/dashboard" style="display:inline-block;padding:8px 14px;background:#c8102e;color:#ffffff;border-radius:6px;text-decoration:none;font-weight:600;font-size:13px;">View in Cadence</a>
@@ -163,7 +188,11 @@ export async function sendSummaryForSite(
     </div>
   `;
 
-  const subject = `${opts.subjectPrefix ?? ""}Cadence — Weekly Inspection Status for ${site.name} — Week of ${weekRange}`;
+  const subjectBase =
+    kind === "completion"
+      ? `Cadence — Completed Inspection Report for ${site.name} — Week of ${weekRange}`
+      : `Cadence — Weekly Inspection Status for ${site.name} — Week of ${weekRange}`;
+  const subject = `${opts.subjectPrefix ?? ""}${subjectBase}`;
 
   if (!resend) {
     return {
@@ -174,8 +203,6 @@ export async function sendSummaryForSite(
     };
   }
 
-  // Send one email per recipient so a single invalid address doesn't
-  // poison the entire batch.
   const failures: { email: string; error: string }[] = [];
   let succeeded = 0;
 
@@ -189,7 +216,7 @@ export async function sendSummaryForSite(
       });
       if (error) {
         console.error(
-          `[send-summary] ${site.name} → ${r.email} failed:`,
+          `[send-summary:${kind}] ${site.name} → ${r.email} failed:`,
           error.message,
         );
         failures.push({ email: r.email, error: error.message });
@@ -199,7 +226,7 @@ export async function sendSummaryForSite(
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.error(
-        `[send-summary] ${site.name} → ${r.email} threw:`,
+        `[send-summary:${kind}] ${site.name} → ${r.email} threw:`,
         message,
       );
       failures.push({ email: r.email, error: message });

@@ -3,10 +3,18 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, History as HistoryIcon } from "lucide-react";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { ArrowLeft, History as HistoryIcon, CheckCircle2 } from "lucide-react";
 import { InspectionMatrix } from "@/components/inspection-matrix";
-import { formatWeekRange, formatDateTime } from "@/lib/dates";
+import { CompletionReportButton } from "@/components/completion-report-button";
+import { formatWeekRange, daysRemaining } from "@/lib/dates";
 import { requireSiteContext } from "@/lib/admin-guard";
+import { isAdminRole } from "@/lib/site-context";
 import type {
   Area,
   AreaRequirement,
@@ -82,7 +90,12 @@ export default async function HistoryDetailPage({
 
   const total = taskList.length;
   const approved = taskList.filter((t) => t.status === "approved").length;
+  const submitted = taskList.filter((t) => t.status === "submitted").length;
+  const pending = taskList.filter((t) => t.status === "pending").length;
+  const completePct = total === 0 ? 0 : Math.round((approved / total) * 100);
   const past = isPastWeek(cycle.week_end);
+  const fullyApproved = total > 0 && pending === 0 && submitted === 0;
+  const canSendCompletion = fullyApproved && isAdminRole(role);
 
   return (
     <div className="px-8 py-8 max-w-7xl">
@@ -107,13 +120,13 @@ export default async function HistoryDetailPage({
                 Past week
               </Badge>
             )}
-          </div>
-          <p className="text-sm text-muted-foreground mt-1">
-            {approved} of {total} approved
-            {cycle.completed_at && (
-              <> · completed {formatDateTime(cycle.completed_at)}</>
+            {fullyApproved && (
+              <Badge className="gap-1 bg-green-600 hover:bg-green-600 text-white">
+                <CheckCircle2 className="size-3" />
+                100% approved
+              </Badge>
             )}
-          </p>
+          </div>
           {past && (
             <p className="text-xs text-muted-foreground mt-2 max-w-xl">
               This is a past inspection week. You can still upload documents
@@ -121,6 +134,78 @@ export default async function HistoryDetailPage({
               entries or corrections.
             </p>
           )}
+        </div>
+        {canSendCompletion && <CompletionReportButton cycleId={cycle.id} />}
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">
+              Approved
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-semibold text-green-700 dark:text-green-400">
+              {approved}
+              <span className="text-sm text-muted-foreground font-normal">
+                /{total}
+              </span>
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">
+              Submitted
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-semibold text-yellow-700 dark:text-yellow-400">
+              {submitted}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">
+              Pending
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-semibold text-red-700 dark:text-red-400">
+              {pending}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">
+              {past ? "Status" : "Days remaining"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-semibold">
+              {past ? "Completed" : daysRemaining(cycle.week_end)}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="mb-4">
+        <div className="flex items-center justify-between mb-1.5">
+          <p className="text-xs font-medium text-muted-foreground">
+            {approved} of {total} approved
+          </p>
+          <p className="text-xs font-medium text-muted-foreground">
+            {completePct}%
+          </p>
+        </div>
+        <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+          <div
+            className="h-full bg-green-600 dark:bg-green-500 transition-all"
+            style={{ width: `${completePct}%` }}
+          />
         </div>
       </div>
 

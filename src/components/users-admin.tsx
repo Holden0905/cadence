@@ -120,7 +120,7 @@ export function UsersAdmin({
         );
       }
     } else {
-      toast.success("Existing user added to this site");
+      toast.info("Existing user added to this site");
     }
     setInviting(false);
     setDraft({ email: "", fullName: "", role: "inspector" });

@@ -314,16 +314,28 @@ function OwnersDialog({
           ) : (
             sortedOwners.map((o) => {
               const p = profileById.get(o.profile_id);
+              const name = p?.full_name || p?.email || "Unknown";
               return (
                 <div
                   key={o.id}
-                  className="flex items-center justify-between border rounded px-3 py-2"
+                  className="flex items-center justify-between gap-2 border rounded px-3 py-2"
                 >
-                  <div>
-                    <p className="text-sm font-medium">
-                      {p?.full_name || p?.email || "Unknown"}
+                  <div className="min-w-0 flex-1">
+                    <p
+                      className="text-sm font-medium truncate"
+                      title={name}
+                    >
+                      {name}
                     </p>
-                    <p className="text-xs text-muted-foreground capitalize">
+                    {p?.email && (
+                      <p
+                        className="text-xs text-muted-foreground truncate"
+                        title={p.email}
+                      >
+                        {p.email}
+                      </p>
+                    )}
+                    <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mt-0.5">
                       {o.owner_role}
                     </p>
                   </div>
@@ -332,6 +344,7 @@ function OwnersDialog({
                     variant="ghost"
                     onClick={() => removeOwner(o.id)}
                     disabled={busy}
+                    className="shrink-0"
                   >
                     <X className="size-4" />
                   </Button>
@@ -348,18 +361,37 @@ function OwnersDialog({
               value={selectedProfile}
               onValueChange={setSelectedProfile}
             >
-              <SelectTrigger className="flex-1 min-w-[200px]">
+              <SelectTrigger className="flex-1 min-w-[200px] h-auto py-2">
                 <SelectValue placeholder="Select user" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-w-[min(28rem,calc(100vw-2rem))]">
                 {availableProfiles.length === 0 ? (
                   <div className="px-2 py-1.5 text-sm text-muted-foreground">
                     All active users assigned
                   </div>
                 ) : (
                   availableProfiles.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.full_name || p.email}
+                    <SelectItem
+                      key={p.id}
+                      value={p.id}
+                      className="py-1.5"
+                    >
+                      <div className="flex flex-col items-start gap-0.5 min-w-0">
+                        <span
+                          className="font-medium truncate max-w-[22rem]"
+                          title={p.full_name ?? p.email}
+                        >
+                          {p.full_name || p.email}
+                        </span>
+                        {p.full_name && (
+                          <span
+                            className="text-xs text-muted-foreground truncate max-w-[22rem]"
+                            title={p.email}
+                          >
+                            {p.email}
+                          </span>
+                        )}
+                      </div>
                     </SelectItem>
                   ))
                 )}

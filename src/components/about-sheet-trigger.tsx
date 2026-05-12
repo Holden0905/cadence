@@ -10,22 +10,34 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { AboutContent } from "@/components/about-content";
 
 export function AboutSheetTrigger() {
   return (
     <Sheet>
-      <SheetTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-8"
-          aria-label="About Cadence"
-          title="About Cadence"
-        >
-          <Info className="size-4" />
-        </Button>
-      </SheetTrigger>
+      <TooltipProvider delayDuration={200}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <SheetTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-10"
+                aria-label="About Cadence"
+              >
+                <Info className="size-6" />
+              </Button>
+            </SheetTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">About Cadence</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
       <SheetContent
         side="right"
         className="w-full sm:max-w-2xl overflow-y-auto"

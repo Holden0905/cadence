@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { Label } from "@/components/ui/label";
 import { isValidEmail, normalizeEmail } from "@/lib/validation";
 import type { Recipient } from "@/lib/types";
 
@@ -186,8 +187,9 @@ export function RecipientsAdmin({
           </DialogHeader>
           <div className="space-y-3">
             <div>
-              <label className="text-sm font-medium">Email</label>
+              <Label htmlFor="recipient_email">Email</Label>
               <Input
+                id="recipient_email"
                 type="email"
                 value={draft.email}
                 onChange={(e) =>
@@ -197,8 +199,9 @@ export function RecipientsAdmin({
               />
             </div>
             <div>
-              <label className="text-sm font-medium">Name (optional)</label>
+              <Label htmlFor="recipient_name">Name (optional)</Label>
               <Input
+                id="recipient_name"
                 value={draft.full_name}
                 onChange={(e) =>
                   setDraft({ ...draft, full_name: e.target.value })

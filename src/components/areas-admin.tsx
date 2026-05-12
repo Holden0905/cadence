@@ -24,6 +24,7 @@ import {
 import { Card } from "@/components/ui/card";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { Label } from "@/components/ui/label";
 import { isPositiveInteger } from "@/lib/validation";
 import type { Area } from "@/lib/types";
 
@@ -214,8 +215,9 @@ export function AreasAdmin({
           </DialogHeader>
           <div className="space-y-3">
             <div>
-              <label className="text-sm font-medium">Name</label>
+              <Label htmlFor="area_name">Name</Label>
               <Input
+                id="area_name"
                 value={draft.name}
                 onChange={(e) =>
                   setDraft({ ...draft, name: e.target.value })
@@ -224,8 +226,9 @@ export function AreasAdmin({
               />
             </div>
             <div>
-              <label className="text-sm font-medium">Sort order</label>
+              <Label htmlFor="area_sort_order">Sort order</Label>
               <Input
+                id="area_sort_order"
                 type="number"
                 min={1}
                 step={1}

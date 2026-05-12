@@ -69,8 +69,9 @@ export async function sendPasswordResetEmail(args: {
   // the hash and calls setSession itself. Don't route through
   // /auth/callback (which is server-side code exchange / PKCE only).
   const redirectTo = `${appUrl}/update-password`;
+  const generatedAt = new Date();
   console.log(
-    `[send-password-reset] generating recovery link for ${profile.email} with redirect_to=${redirectTo}`,
+    `[send-password-reset] generating recovery link for ${profile.email} at ${generatedAt.toISOString()} (epoch=${Math.floor(generatedAt.getTime() / 1000)}) with redirect_to=${redirectTo}`,
   );
 
   const { data: linkData, error: linkError } =
@@ -85,9 +86,45 @@ export async function sendPasswordResetEmail(args: {
     return { error: linkError?.message ?? "Failed to generate reset link" };
   }
   const actionLink = linkData.properties.action_link;
-  console.log(
-    `[send-password-reset] action_link generated (${actionLink.slice(0, 80)}…)`,
-  );
+
+  // Detailed link diagnostics so we can rule out (a) truncation in the
+  // email HTML, (b) double-encoding, and (c) compare expiry timestamps
+  // when users report "link expired".
+  try {
+    const parsed = new URL(actionLink);
+    const params = parsed.searchParams;
+    console.log(
+      "[send-password-reset] action_link DETAILS:",
+      JSON.stringify(
+        {
+          host: parsed.host,
+          path: parsed.pathname,
+          length: actionLink.length,
+          token_present: !!params.get("token"),
+          token_prefix: params.get("token")?.slice(0, 12) ?? null,
+          token_hash_present: !!params.get("token_hash"),
+          type: params.get("type"),
+          redirect_to: params.get("redirect_to"),
+          all_param_names: Array.from(params.keys()),
+          // properties on generateLink may include hashed_token,
+          // verification_type, etc. — log the lot.
+          generateLink_properties: linkData.properties,
+        },
+        null,
+        2,
+      ),
+    );
+    console.log(
+      `[send-password-reset] FULL action_link: ${actionLink}`,
+    );
+  } catch (err) {
+    console.error(
+      "[send-password-reset] could not parse action_link as URL:",
+      err,
+      "raw:",
+      actionLink,
+    );
+  }
 
   if (!resend) {
     console.warn(
@@ -112,6 +149,15 @@ export async function sendPasswordResetEmail(args: {
     mode === "invite"
       ? `Welcome to Cadence${args.siteName ? ` — ${args.siteName}` : ""}`
       : "Reset your Cadence password";
+
+  // Sanity-check that the action_link appears, verbatim, in the
+  // rendered HTML body — proves nothing on our side is truncating it.
+  const linkAppearancesInBody = (html.match(
+    new RegExp(actionLink.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"),
+  ) ?? []).length;
+  console.log(
+    `[send-password-reset] html length=${html.length} chars; action_link appears ${linkAppearancesInBody}× in body`,
+  );
 
   console.log(
     `[send-password-reset] sending via Resend → from=${FROM_ADDRESS} to=${profile.email} subject="${subject}"`,

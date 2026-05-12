@@ -3,13 +3,13 @@
 import { Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import {
   Tooltip,
   TooltipContent,
@@ -18,13 +18,13 @@ import {
 } from "@/components/ui/tooltip";
 import { AboutContent } from "@/components/about-content";
 
-export function AboutSheetTrigger() {
+export function AboutDialogTrigger() {
   return (
-    <Sheet>
+    <Dialog>
       <TooltipProvider delayDuration={200}>
         <Tooltip>
           <TooltipTrigger asChild>
-            <SheetTrigger asChild>
+            <DialogTrigger asChild>
               <Button
                 variant="ghost"
                 size="icon"
@@ -33,25 +33,20 @@ export function AboutSheetTrigger() {
               >
                 <Info className="size-6" />
               </Button>
-            </SheetTrigger>
+            </DialogTrigger>
           </TooltipTrigger>
           <TooltipContent side="bottom">About Cadence</TooltipContent>
         </Tooltip>
       </TooltipProvider>
-      <SheetContent
-        side="right"
-        className="w-full sm:max-w-2xl overflow-y-auto"
-      >
-        <SheetHeader className="sr-only">
-          <SheetTitle>About Cadence</SheetTitle>
-          <SheetDescription>
+      <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader className="sr-only">
+          <DialogTitle>About Cadence</DialogTitle>
+          <DialogDescription>
             Overview of Cadence and what each page does.
-          </SheetDescription>
-        </SheetHeader>
-        <div className="p-6">
-          <AboutContent />
-        </div>
-      </SheetContent>
-    </Sheet>
+          </DialogDescription>
+        </DialogHeader>
+        <AboutContent />
+      </DialogContent>
+    </Dialog>
   );
 }

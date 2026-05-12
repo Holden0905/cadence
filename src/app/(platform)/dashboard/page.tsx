@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { InspectionMatrix } from "@/components/inspection-matrix";
 import { TestSummaryButton } from "@/components/test-summary-button";
 import { TestNudgeButton } from "@/components/test-nudge-button";
-import { AboutSheetTrigger } from "@/components/about-sheet-trigger";
+import { AboutDialogTrigger } from "@/components/about-dialog-trigger";
 import { formatWeekRange, daysRemaining } from "@/lib/dates";
 import { requireSiteContext } from "@/lib/admin-guard";
 import { isSuperAdminRole } from "@/lib/site-context";
@@ -111,7 +111,7 @@ export default async function DashboardPage() {
           >
             {cycle.status}
           </Badge>
-          <AboutSheetTrigger />
+          <AboutDialogTrigger />
         </div>
       </div>
 

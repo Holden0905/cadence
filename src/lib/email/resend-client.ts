@@ -29,3 +29,12 @@ export function appBaseUrl(): string {
   if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
   return "https://cadence.example.com";
 }
+
+/** Resend's default free-tier rate limit is 2 req/s; paid is 10 req/s.
+ *  We pace individual sends at 250ms (~4 req/s) to stay safely under
+ *  both ceilings while keeping a 25-recipient site under 10s total. */
+export const RESEND_SEND_INTERVAL_MS = 250;
+
+export function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}

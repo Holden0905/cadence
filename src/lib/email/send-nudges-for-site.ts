@@ -1,9 +1,11 @@
 import { createAdminClient } from "@/utils/supabase/admin";
 import {
   FROM_ADDRESS,
+  RESEND_SEND_INTERVAL_MS,
   appBaseUrl,
   formatWeekRange,
   getResend,
+  sleep,
 } from "@/lib/email/resend-client";
 import type {
   Area,
@@ -199,6 +201,9 @@ export async function sendNudgesForSite(
     html: string;
     results: typeof results;
   }) {
+    // Pace sends to stay under Resend's per-second rate limit. Every
+    // send after the first waits the configured interval.
+    if (args.results.length > 0) await sleep(RESEND_SEND_INTERVAL_MS);
     try {
       const { error } = await resend!.emails.send({
         from: FROM_ADDRESS,

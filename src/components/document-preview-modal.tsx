@@ -26,6 +26,8 @@ type Props = {
   taskStatusLabel: string;
   /** Provided by parent when the user is allowed to attach more files. */
   onAddMore?: () => void;
+  /** When false, hide per-document delete buttons (viewer role). */
+  canDelete?: boolean;
 };
 
 export function DocumentPreviewModal({
@@ -36,6 +38,7 @@ export function DocumentPreviewModal({
   inspectionTypeName,
   taskStatusLabel,
   onAddMore,
+  canDelete = true,
 }: Props) {
   const router = useRouter();
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
@@ -161,15 +164,17 @@ export function DocumentPreviewModal({
                             </a>
                           </Button>
                         )}
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setConfirmDoc(doc)}
-                          className="text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="size-3.5" />
-                          Delete
-                        </Button>
+                        {canDelete && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setConfirmDoc(doc)}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="size-3.5" />
+                            Delete
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </div>

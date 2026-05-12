@@ -17,6 +17,7 @@ const ROLE_LABEL: Record<SiteRole, string> = {
   super_admin: "Super admin",
   site_admin: "Site admin",
   inspector: "Inspector",
+  viewer: "Viewer",
 };
 
 export function SitePicker({

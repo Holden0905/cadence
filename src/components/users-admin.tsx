@@ -262,6 +262,7 @@ export function UsersAdmin({
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
+                          <SelectItem value="viewer">Viewer</SelectItem>
                           <SelectItem value="inspector">Inspector</SelectItem>
                           <SelectItem value="site_admin">Site admin</SelectItem>
                           {callerIsSuperAdmin && (
@@ -375,6 +376,7 @@ export function UsersAdmin({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="viewer">Viewer</SelectItem>
                   <SelectItem value="inspector">Inspector</SelectItem>
                   <SelectItem value="site_admin">Site admin</SelectItem>
                   {callerIsSuperAdmin && (

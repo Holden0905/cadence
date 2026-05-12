@@ -71,6 +71,7 @@ export function InspectionMatrix({
   } | null>(null);
 
   const isAdmin = userRole === "site_admin" || userRole === "super_admin";
+  const isViewer = userRole === "viewer";
 
   const handleCellClick = (areaId: string, typeId: string) => {
     const cell = getCell(matrix, areaId, typeId);
@@ -80,6 +81,8 @@ export function InspectionMatrix({
     if (!area || !type) return;
 
     if (cell.task.status === "pending") {
+      // Viewers can see the matrix but never upload.
+      if (isViewer) return;
       setUploadCell({
         taskId: cell.task.id,
         areaName: area.name,
@@ -107,9 +110,11 @@ export function InspectionMatrix({
     setPreviewCell(null);
   };
 
-  // Submitted tasks: anyone can add more.
+  // Submitted tasks: any writer can add more.
   // Approved tasks: only admins can add more (late corrections).
+  // Viewers can never add.
   const previewAllowsAdd =
+    !isViewer &&
     previewCell &&
     (previewCell.status === "submitted" ||
       (previewCell.status === "approved" && isAdmin));
@@ -180,6 +185,7 @@ export function InspectionMatrix({
           inspectionTypeName={previewCell.typeName}
           taskStatusLabel={previewCell.statusLabel}
           onAddMore={previewAllowsAdd ? handleAddMoreFromPreview : undefined}
+          canDelete={!isViewer}
         />
       )}
     </>

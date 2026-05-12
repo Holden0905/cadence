@@ -1,4 +1,4 @@
-export type SiteRole = "super_admin" | "site_admin" | "inspector";
+export type SiteRole = "super_admin" | "site_admin" | "inspector" | "viewer";
 
 export type Site = {
   id: string;

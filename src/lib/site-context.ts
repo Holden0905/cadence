@@ -63,3 +63,14 @@ export function isAdminRole(role: SiteRole | null): boolean {
 export function isSuperAdminRole(role: SiteRole | null): boolean {
   return role === "super_admin";
 }
+
+export function isViewerRole(role: SiteRole | null): boolean {
+  return role === "viewer";
+}
+
+/** Anyone who can mutate at the current site (inspector + admins). */
+export function isWriterRole(role: SiteRole | null): boolean {
+  return (
+    role === "super_admin" || role === "site_admin" || role === "inspector"
+  );
+}

@@ -63,12 +63,9 @@ export async function requireSiteContext(): Promise<AuthContext> {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const siteId = await getCurrentSiteId();
-  if (!siteId) redirect("/auth/resolve-site");
-
-  const role = await getUserSiteRole(user.id, siteId);
-  if (!role) redirect("/auth/resolve-site");
-
+  // Look up the profile BEFORE checking site context — if the user
+  // was just invited or reset, they need to change their temp password
+  // before doing anything else, including site selection.
   const admin = createAdminClient();
   const { data: profile } = await admin
     .from("profiles")
@@ -76,6 +73,14 @@ export async function requireSiteContext(): Promise<AuthContext> {
     .eq("id", user.id)
     .maybeSingle<Profile>();
   if (!profile) redirect("/login");
+
+  if (profile.must_change_password) redirect("/update-password");
+
+  const siteId = await getCurrentSiteId();
+  if (!siteId) redirect("/auth/resolve-site");
+
+  const role = await getUserSiteRole(user.id, siteId);
+  if (!role) redirect("/auth/resolve-site");
 
   return {
     user: { id: user.id, email: user.email ?? profile.email },

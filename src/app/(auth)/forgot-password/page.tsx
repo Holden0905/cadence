@@ -49,8 +49,9 @@ export default function ForgotPasswordPage() {
           />
           <CardTitle className="text-2xl">Check your email</CardTitle>
           <CardDescription>
-            If an account exists for <strong>{email}</strong>, we sent a
-            password reset link. The link expires in 1 hour.
+            If an account exists for <strong>{email}</strong>, we&apos;ve
+            emailed a temporary password. Sign in with it and you&apos;ll
+            be prompted to set a new password immediately.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -75,8 +76,8 @@ export default function ForgotPasswordPage() {
         />
         <CardTitle className="text-2xl">Reset your password</CardTitle>
         <CardDescription>
-          Enter your email and we&apos;ll send you a link to set a new
-          password.
+          Enter your email and we&apos;ll send you a temporary password.
+          Sign in with it and you&apos;ll be prompted to set a new one.
         </CardDescription>
       </CardHeader>
       <CardContent>

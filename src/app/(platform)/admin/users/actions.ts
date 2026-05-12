@@ -10,7 +10,8 @@ import {
   isSuperAdminRole,
 } from "@/lib/site-context";
 import { isValidEmail, normalizeEmail } from "@/lib/validation";
-import { sendPasswordResetEmail } from "@/lib/email/send-password-reset";
+import { generateTempPassword } from "@/lib/temp-password";
+import { sendTempPasswordEmail } from "@/lib/email/send-temp-password";
 import type { SiteRole } from "@/lib/types";
 
 export type InviteResult =
@@ -56,8 +57,11 @@ export async function inviteUserAction(args: {
 
   let profileId: string;
   let created = false;
+  let tempPassword: string | null = null;
 
   if (existingProfile) {
+    // Existing user — just attach to this site. Don't change their
+    // password, don't email them a temp password.
     profileId = existingProfile.id;
     if (fullName && !existingProfile.full_name) {
       await admin
@@ -66,11 +70,7 @@ export async function inviteUserAction(args: {
         .eq("id", profileId);
     }
   } else {
-    const tempPassword =
-      "Cadence" +
-      Math.random().toString(36).slice(2, 10) +
-      Math.floor(Math.random() * 99 + 10) +
-      "!";
+    tempPassword = generateTempPassword();
     const { data: createRes, error: createErr } =
       await admin.auth.admin.createUser({
         email,
@@ -84,14 +84,19 @@ export async function inviteUserAction(args: {
     profileId = createRes.user.id;
     created = true;
 
-    if (fullName) {
-      await admin
-        .from("profiles")
-        .update({ full_name: fullName, updated_at: new Date().toISOString() })
-        .eq("id", profileId);
-    }
+    // Set full_name AND flip the must_change_password flag so they
+    // can't dwell on the dashboard with a known-to-the-admin password.
+    await admin
+      .from("profiles")
+      .update({
+        full_name: fullName,
+        must_change_password: true,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", profileId);
   }
 
+  // Membership (insert new or reactivate existing).
   const { data: existingMembership } = await admin
     .from("user_sites")
     .select("id")
@@ -114,20 +119,22 @@ export async function inviteUserAction(args: {
     if (insErr) return { error: insErr.message };
   }
 
-  // Welcome email — only for newly-created users (existing users already
-  // have a password). Failure to deliver doesn't block the invite.
+  // Welcome email — only for newly-created users with a fresh temp
+  // password. Existing users (attached to another site) already know
+  // their own password.
   let emailSent = false;
   let emailReason: string | undefined;
-  if (created) {
+  if (created && tempPassword) {
     const { data: siteRow } = await admin
       .from("sites")
       .select("name")
       .eq("id", siteId)
       .maybeSingle<{ name: string }>();
-    const result = await sendPasswordResetEmail({
+    const result = await sendTempPasswordEmail({
       email,
       fullName,
       mode: "invite",
+      password: tempPassword,
       siteName: siteRow?.name,
     });
     if ("error" in result) {
@@ -223,11 +230,6 @@ export async function toggleUserSiteActiveAction(
   return { ok: true };
 }
 
-/**
- * Remove a user's membership from the current site. Returns
- * { remainingMemberships } so the UI can warn when the user will
- * have no other site access after this.
- */
 export async function deleteUserMembershipAction(
   membershipId: string,
 ): Promise<
@@ -279,11 +281,6 @@ export async function deleteUserMembershipAction(
   };
 }
 
-/**
- * Edit profile (full_name + email). Updates auth.users + profiles via
- * the admin_update_user SECURITY DEFINER function so the email change
- * applies immediately without Supabase's confirmation flow.
- */
 export async function updateUserProfileAction(args: {
   profileId: string;
   email: string;
@@ -310,8 +307,6 @@ export async function updateUserProfileAction(args: {
   if (!fullName) return { error: "Full name required" };
 
   const admin = createAdminClient();
-  // Verify the target is a member of the caller's site (so we don't
-  // let a site admin edit users outside their scope).
   const { data: targetMembership } = await admin
     .from("user_sites")
     .select("id")
@@ -333,13 +328,20 @@ export async function updateUserProfileAction(args: {
 }
 
 /**
- * Admin-initiated password reset — generates a Supabase recovery link
- * and emails it via Resend.
+ * Admin-initiated password reset. Generates a NEW temporary password,
+ * sets it on the auth user via the admin API, flips
+ * must_change_password = true on the profile, then emails the temp
+ * password to the user (plain text, no recovery links). The user can
+ * sign in immediately with the new temp password and will be forced
+ * to /update-password before doing anything else.
  */
 export async function sendUserPasswordResetAction(args: {
   email: string;
   fullName?: string | null;
-}): Promise<{ error: string } | { ok: true; sent: boolean; reason?: string }> {
+}): Promise<
+  | { error: string }
+  | { ok: true; sent: boolean; reason?: string }
+> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -353,13 +355,41 @@ export async function sendUserPasswordResetAction(args: {
   if (!callerRole || !isAdminRole(callerRole)) {
     return { error: "Not authorized" };
   }
-  if (!isValidEmail(args.email))
-    return { error: "Invalid email" };
+  if (!isValidEmail(args.email)) return { error: "Invalid email" };
+  const email = normalizeEmail(args.email);
 
-  const result = await sendPasswordResetEmail({
-    email: normalizeEmail(args.email),
-    fullName: args.fullName,
+  const admin = createAdminClient();
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("id, email, full_name")
+    .ilike("email", email)
+    .maybeSingle<{ id: string; email: string; full_name: string | null }>();
+  if (!profile) return { error: "User not found" };
+
+  const tempPassword = generateTempPassword();
+
+  const { error: updErr } = await admin.auth.admin.updateUserById(
+    profile.id,
+    { password: tempPassword },
+  );
+  if (updErr) {
+    console.error("[admin-reset] updateUserById failed:", updErr);
+    return { error: updErr.message };
+  }
+
+  await admin
+    .from("profiles")
+    .update({
+      must_change_password: true,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", profile.id);
+
+  const result = await sendTempPasswordEmail({
+    email: profile.email,
+    fullName: args.fullName ?? profile.full_name,
     mode: "reset",
+    password: tempPassword,
   });
   if ("error" in result) return { error: result.error };
   return { ok: true, sent: result.sent, reason: result.reason };

@@ -28,57 +28,8 @@ export default function UpdatePasswordPage() {
 
   useEffect(() => {
     const supabase = createClient();
-
-    const finish = (ok: boolean) =>
-      setSessionState(ok ? "ready" : "no-session");
-
-    // Supabase recovery links use the implicit flow: the verify
-    // endpoint redirects here with #access_token=...&refresh_token=...
-    // &type=recovery. Parse the hash and set the session manually.
-    const hash = window.location.hash.startsWith("#")
-      ? window.location.hash.slice(1)
-      : "";
-    if (hash) {
-      const params = new URLSearchParams(hash);
-      const access_token = params.get("access_token");
-      const refresh_token = params.get("refresh_token");
-      const type = params.get("type");
-      const hashError = params.get("error_description") ?? params.get("error");
-
-      if (hashError) {
-        setError(decodeURIComponent(hashError));
-        finish(false);
-        return;
-      }
-
-      if (access_token && refresh_token) {
-        // Clean the hash from the URL so a refresh doesn't re-trigger.
-        window.history.replaceState(
-          null,
-          "",
-          window.location.pathname + window.location.search,
-        );
-
-        supabase.auth
-          .setSession({ access_token, refresh_token })
-          .then(({ error: setErr }) => {
-            if (setErr) {
-              setError(setErr.message);
-              finish(false);
-            } else if (type === "recovery" || type === "invite") {
-              finish(true);
-            } else {
-              finish(true);
-            }
-          });
-        return;
-      }
-    }
-
-    // No hash — maybe the user already has a session (e.g., they were
-    // signed in and clicked "Reset password" themselves).
     supabase.auth.getUser().then(({ data }) => {
-      finish(!!data.user);
+      setSessionState(data.user ? "ready" : "no-session");
     });
   }, []);
 
@@ -99,11 +50,25 @@ export default function UpdatePasswordPage() {
     const { error: updateError } = await supabase.auth.updateUser({
       password,
     });
-    setBusy(false);
-
     if (updateError) {
       setError(updateError.message);
+      setBusy(false);
       return;
+    }
+
+    // Clear the must_change_password flag so we don't loop back here
+    // on the next platform page load.
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) {
+      await supabase
+        .from("profiles")
+        .update({
+          must_change_password: false,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", user.id);
     }
 
     router.push("/auth/resolve-site");
@@ -131,15 +96,15 @@ export default function UpdatePasswordPage() {
             priority
             className="mb-2"
           />
-          <CardTitle className="text-2xl">Link expired</CardTitle>
+          <CardTitle className="text-2xl">Sign in first</CardTitle>
           <CardDescription>
-            {error ??
-              "This password reset link is no longer valid. Request a new one to try again."}
+            You need to sign in before you can change your password. Use
+            the temporary password from your invite or reset email.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Button asChild className="w-full">
-            <a href="/forgot-password">Request a new link</a>
+            <a href="/login">Go to sign in</a>
           </Button>
         </CardContent>
       </Card>

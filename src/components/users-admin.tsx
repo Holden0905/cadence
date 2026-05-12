@@ -113,10 +113,12 @@ export function UsersAdmin({
     }
     if (result.created) {
       if (result.emailSent) {
-        toast.success("New user created — welcome email sent");
+        toast.success(
+          "New user created — welcome email with temporary password sent",
+        );
       } else {
         toast.warning(
-          `New user created, but welcome email wasn't sent${result.emailReason ? `: ${result.emailReason}` : ""}`,
+          `New user created, but welcome email wasn't sent${result.emailReason ? `: ${result.emailReason}` : ""}. Share their temporary password manually.`,
         );
       }
     } else {
@@ -165,10 +167,12 @@ export function UsersAdmin({
       return;
     }
     if (result.sent) {
-      toast.success(`Reset link sent to ${u.profile.email}`);
+      toast.success(
+        `Temporary password emailed to ${u.profile.email} — their old password no longer works`,
+      );
     } else {
       toast.warning(
-        `Reset link not sent${result.reason ? ` (${result.reason})` : ""}`,
+        `Email not sent${result.reason ? ` (${result.reason})` : ""} — their password was still reset; share it manually if needed`,
       );
     }
   };
@@ -337,9 +341,10 @@ export function UsersAdmin({
             <DialogTitle>Invite a user</DialogTitle>
             <DialogDescription>
               If the email already has an account, they&apos;ll be added to
-              this site with the selected role. Otherwise a new account is
-              created and a welcome email is sent so they can set their
-              password.
+              this site with the selected role. Otherwise a new account
+              is created with a temporary password emailed to them —
+              they&apos;ll be required to set a new password after their
+              first sign-in.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">

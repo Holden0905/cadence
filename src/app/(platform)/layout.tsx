@@ -18,19 +18,30 @@ export default async function PlatformLayout({
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
+  // Profile (and must_change_password check) BEFORE site selection —
+  // a freshly-invited user has no site cookie yet and we still need
+  // to bounce them to /update-password before they pick a site.
+  const admin = createAdminClient();
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("*")
+    .eq("id", user.id)
+    .maybeSingle<Profile>();
+  if (!profile) redirect("/login");
+  if (profile.must_change_password) redirect("/update-password");
+
   const siteId = await getCurrentSiteId();
   if (!siteId) redirect("/auth/resolve-site");
 
   const role = await getUserSiteRole(user.id, siteId);
   if (!role) redirect("/auth/resolve-site");
 
-  const admin = createAdminClient();
-  const [{ data: profile }, { data: currentSite }] = await Promise.all([
-    admin.from("profiles").select("*").eq("id", user.id).maybeSingle<Profile>(),
-    admin.from("sites").select("*").eq("id", siteId).maybeSingle<Site>(),
-  ]);
+  const { data: currentSite } = await admin
+    .from("sites")
+    .select("*")
+    .eq("id", siteId)
+    .maybeSingle<Site>();
 
-  if (!profile) redirect("/login");
   if (!currentSite || !currentSite.is_active) redirect("/auth/resolve-site");
 
   const memberships = await getUserMemberships(user.id);

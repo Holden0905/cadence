@@ -6,7 +6,6 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   History,
-  Info,
   CheckSquare,
   MapPin,
   Link2,
@@ -44,7 +43,6 @@ const ROLE_LABEL: Record<SiteRole, string> = {
 const userItems: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/history", label: "History", icon: History },
-  { href: "/about", label: "About", icon: Info },
 ];
 
 const adminItems: NavItem[] = [

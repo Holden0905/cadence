@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
-import { getUserSiteRole, isSuperAdminRole } from "@/lib/site-context";
 
 export type SiteActionResult = { error: string } | { ok: true };
 

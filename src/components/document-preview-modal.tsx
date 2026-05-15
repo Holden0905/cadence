@@ -42,34 +42,40 @@ export function DocumentPreviewModal({
 }: Props) {
   const router = useRouter();
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(false);
   const [docs, setDocs] = useState<DocumentRow[]>(documents);
   const [confirmDoc, setConfirmDoc] = useState<DocumentRow | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  useEffect(() => {
+  // Re-sync local docs to the prop when the modal opens or the parent
+  // passes a new documents array. Done as a state adjustment during
+  // render (rather than in an effect) per React 19 guidance.
+  const [propsSnapshot, setPropsSnapshot] = useState({ open, documents });
+  if (
+    propsSnapshot.open !== open ||
+    propsSnapshot.documents !== documents
+  ) {
+    setPropsSnapshot({ open, documents });
     if (open) setDocs(documents);
-  }, [open, documents]);
+  }
 
   const paths = useMemo(() => docs.map((d) => d.file_path), [docs]);
+  const loading =
+    open && paths.length > 0 && paths.some((p) => !signedUrls[p]);
 
   useEffect(() => {
-    if (!open || paths.length === 0) {
-      setSignedUrls({});
-      return;
-    }
-    setLoading(true);
+    if (!open || paths.length === 0) return;
     const supabase = createClient();
     supabase.storage
       .from("inspection-documents")
       .createSignedUrls(paths, 3600)
       .then(({ data }) => {
-        const map: Record<string, string> = {};
-        data?.forEach((entry, idx) => {
-          if (entry.signedUrl) map[paths[idx]] = entry.signedUrl;
+        setSignedUrls((prev) => {
+          const next = { ...prev };
+          data?.forEach((entry, idx) => {
+            if (entry.signedUrl) next[paths[idx]] = entry.signedUrl;
+          });
+          return next;
         });
-        setSignedUrls(map);
-        setLoading(false);
       });
   }, [open, paths]);
 

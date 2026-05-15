@@ -20,7 +20,6 @@ import { formatDateTime, formatWeekRange } from "@/lib/dates";
 import { rejectTaskAction } from "@/app/(platform)/review/actions";
 import type {
   Area,
-  AreaRequirement,
   DocumentRow,
   InspectionCycle,
   InspectionTask,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { createClient } from "@/utils/supabase/client";
@@ -46,13 +46,18 @@ export function UploadModal({
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
-  useEffect(() => {
-    if (!open) {
-      files.forEach((f) => f.previewUrl && URL.revokeObjectURL(f.previewUrl));
-      setFiles([]);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  const handleOpenChange = useCallback(
+    (nextOpen: boolean) => {
+      if (!nextOpen) {
+        files.forEach(
+          (f) => f.previewUrl && URL.revokeObjectURL(f.previewUrl),
+        );
+        setFiles([]);
+      }
+      onOpenChange(nextOpen);
+    },
+    [files, onOpenChange],
+  );
 
   const addFiles = (incoming: File[]) => {
     const staged = incoming.map<StagedFile>((file) => ({
@@ -165,7 +170,7 @@ export function UploadModal({
       toast.success(
         `${files.length} document${files.length > 1 ? "s" : ""} submitted`,
       );
-      onOpenChange(false);
+      handleOpenChange(false);
       router.refresh();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Upload failed";
@@ -176,7 +181,7 @@ export function UploadModal({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Upload inspection document</DialogTitle>
@@ -268,7 +273,7 @@ export function UploadModal({
         <DialogFooter>
           <Button
             variant="outline"
-            onClick={() => onOpenChange(false)}
+            onClick={() => handleOpenChange(false)}
             disabled={uploading}
           >
             Cancel

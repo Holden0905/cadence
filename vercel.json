@@ -7,11 +7,11 @@
     },
     {
       "path": "/api/cron/send-nudge",
-      "schedule": "0 14 * * 3"
+      "schedule": "0 17 * * 3"
     },
     {
       "path": "/api/cron/send-summary",
-      "schedule": "0 19 * * 4"
+      "schedule": "0 20 * * 4"
     }
   ]
 }

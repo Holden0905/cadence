@@ -7,6 +7,10 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    // /api/cron/* is excluded because those routes authenticate via the
+    // CRON_SECRET header rather than a browser session — letting the
+    // middleware run causes a 307 redirect to /login for Vercel's cron
+    // requests.
+    "/((?!_next/static|_next/image|favicon.ico|api/cron|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

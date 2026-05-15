@@ -44,10 +44,10 @@ export async function GET(request: NextRequest) {
   try {
     return await handle(request);
   } catch (err) {
+    // Full error stays in server logs for debugging; client only sees
+    // a generic message so internal details don't leak.
     console.error("[download-cycle] unhandled:", err);
-    const message = err instanceof Error ? err.message : String(err);
-    const stack = err instanceof Error ? err.stack : undefined;
-    return new Response(JSON.stringify({ error: message, stack }), {
+    return new Response(JSON.stringify({ error: "Download failed" }), {
       status: 500,
       headers: { "Content-Type": "application/json" },
     });

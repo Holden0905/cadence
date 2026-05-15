@@ -108,6 +108,27 @@ export default async function HistoryDetailPage({
   }
   const approvedDocCount = approvedDocIdSet.size;
 
+  // History-only: hide inactive areas that contributed no documents to
+  // this cycle. Active areas always show; inactive areas show only if
+  // there's a historical record (at least one document linked to a
+  // task in this area for this cycle). The dashboard view is
+  // unaffected — it has its own data fetch.
+  const allAreas = (areas ?? []) as Area[];
+  const allRequirements = (requirements ?? []) as AreaRequirement[];
+  const taskByIdForFilter = new Map(taskList.map((t) => [t.id, t]));
+  const reqByIdForFilter = new Map(allRequirements.map((r) => [r.id, r]));
+  const areaIdsWithDocs = new Set<string>();
+  for (const link of documentTasks) {
+    const task = taskByIdForFilter.get(link.task_id);
+    if (!task) continue;
+    const req = reqByIdForFilter.get(task.area_requirement_id);
+    if (!req) continue;
+    areaIdsWithDocs.add(req.area_id);
+  }
+  const visibleAreas = allAreas.filter(
+    (a) => a.is_active || areaIdsWithDocs.has(a.id),
+  );
+
   return (
     <div className="px-8 py-8 max-w-7xl">
       <div className="mb-4">
@@ -236,9 +257,9 @@ export default async function HistoryDetailPage({
 
       <InspectionMatrix
         cycleId={cycle.id}
-        areas={(areas ?? []) as Area[]}
+        areas={visibleAreas}
         inspectionTypes={(types ?? []) as InspectionType[]}
-        requirements={(requirements ?? []) as AreaRequirement[]}
+        requirements={allRequirements}
         tasks={taskList}
         documents={documents}
         documentTasks={documentTasks}

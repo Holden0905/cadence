@@ -14,9 +14,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { FileText, Check, Loader2, History as HistoryIcon } from "lucide-react";
+import { FileText, Check, X, Loader2, History as HistoryIcon } from "lucide-react";
 import { toast } from "sonner";
 import { formatDateTime, formatWeekRange } from "@/lib/dates";
+import { rejectTaskAction } from "@/app/(platform)/review/actions";
 import type {
   Area,
   AreaRequirement,
@@ -47,6 +48,8 @@ export function ReviewList({ items }: Props) {
   const [thumbUrls, setThumbUrls] = useState<Record<string, string>>({});
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [rejecting, setRejecting] = useState<SubmittedItem | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
   const [lightbox, setLightbox] = useState<{
     item: SubmittedItem;
     docIndex: number;
@@ -114,6 +117,41 @@ export function ReviewList({ items }: Props) {
       toast.success("Inspection approved");
       router.refresh();
     }
+  };
+
+  const openReject = (item: SubmittedItem) => {
+    setRejectReason("");
+    setRejecting(item);
+  };
+
+  const confirmReject = async () => {
+    if (!rejecting) return;
+    setBusy(true);
+    const result = await rejectTaskAction({
+      taskId: rejecting.task.id,
+      reason: rejectReason,
+    });
+    setBusy(false);
+    if ("error" in result) {
+      toast.error(result.error);
+      return;
+    }
+    if (result.emailFailed > 0) {
+      toast.warning(
+        `Inspection rejected, but the owner notification failed${result.emailReason ? ` — ${result.emailReason}` : ""}`,
+      );
+    } else if (result.emailed === 0) {
+      toast.success(
+        `Inspection rejected${result.emailReason ? ` — ${result.emailReason}` : " (no owner to notify)"}`,
+      );
+    } else {
+      toast.success(
+        `Inspection rejected and owner notified (${result.emailed})`,
+      );
+    }
+    setRejecting(null);
+    setRejectReason("");
+    router.refresh();
   };
 
   const approveSelected = async () => {
@@ -259,17 +297,94 @@ export function ReviewList({ items }: Props) {
               )}
             </div>
 
-            <Button
-              size="sm"
-              onClick={() => approveOne(it.task.id)}
-              disabled={busy}
-            >
-              <Check className="size-4" />
-              Approve
-            </Button>
+            <div className="flex flex-col gap-2 sm:items-end">
+              <Button
+                size="sm"
+                onClick={() => approveOne(it.task.id)}
+                disabled={busy}
+              >
+                <Check className="size-4" />
+                Approve
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => openReject(it)}
+                disabled={busy}
+              >
+                <X className="size-4" />
+                Reject
+              </Button>
+            </div>
           </Card>
         ))}
       </div>
+
+      <Dialog
+        open={!!rejecting}
+        onOpenChange={(open) => {
+          if (!open && !busy) {
+            setRejecting(null);
+            setRejectReason("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reject inspection</DialogTitle>
+            <DialogDescription>
+              {rejecting ? (
+                <>
+                  Revert <strong>{rejecting.area.name}</strong> —{" "}
+                  {rejecting.inspectionType.name} to pending and notify the
+                  primary owner. The uploaded documents stay attached.
+                </>
+              ) : null}
+            </DialogDescription>
+          </DialogHeader>
+          <div>
+            <label
+              htmlFor="reject_reason"
+              className="text-sm font-medium block mb-1.5"
+            >
+              Reason{" "}
+              <span className="font-normal text-muted-foreground">
+                (optional, included in the email)
+              </span>
+            </label>
+            <textarea
+              id="reject_reason"
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              rows={4}
+              maxLength={1000}
+              placeholder="e.g. Photo doesn't include the timestamp / wrong area / unclear image"
+              className="w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 resize-y"
+              disabled={busy}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setRejecting(null);
+                setRejectReason("");
+              }}
+              disabled={busy}
+            >
+              Cancel
+            </Button>
+            <Button onClick={confirmReject} disabled={busy}>
+              {busy ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <X className="size-4" />
+              )}
+              Reject
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={confirming} onOpenChange={setConfirming}>
         <DialogContent>

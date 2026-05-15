@@ -296,7 +296,7 @@ export function ReviewList({ items }: Props) {
               )}
             </div>
 
-            <div className="flex flex-col gap-2 sm:items-end">
+            <div className="flex flex-row items-center gap-2 sm:self-start">
               <Button
                 size="sm"
                 onClick={() => approveOne(it.task.id)}

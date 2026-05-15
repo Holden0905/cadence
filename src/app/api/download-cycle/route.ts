@@ -1,5 +1,5 @@
 import { type NextRequest } from "next/server";
-import { PassThrough, Readable } from "node:stream";
+import JSZip from "jszip";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import type {
@@ -41,6 +41,20 @@ function jsonError(status: number, message: string): Response {
 }
 
 export async function GET(request: NextRequest) {
+  try {
+    return await handle(request);
+  } catch (err) {
+    console.error("[download-cycle] unhandled:", err);
+    const message = err instanceof Error ? err.message : String(err);
+    const stack = err instanceof Error ? err.stack : undefined;
+    return new Response(JSON.stringify({ error: message, stack }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+}
+
+async function handle(request: NextRequest) {
   const url = new URL(request.url);
   const cycleId = url.searchParams.get("cycleId");
   if (!cycleId) return jsonError(400, "cycleId is required");
@@ -170,88 +184,66 @@ export async function GET(request: NextRequest) {
     return jsonError(404, "No documents to bundle");
   }
 
-  // archiver is CommonJS and Turbopack rejects the ESM default-import
-  // interop, so load it dynamically here.
-  const archiverModule = await import("archiver");
-  const archiver = archiverModule.default;
-  const archive = archiver("zip", { zlib: { level: 6 } });
-  const passthrough = new PassThrough();
-  archive.pipe(passthrough);
+  const zip = new JSZip();
+  const usedNamesByFolder = new Map<string, Set<string>>();
 
-  archive.on("warning", (err) => {
-    console.warn("[download-cycle] archive warning:", err);
-  });
-  archive.on("error", (err) => {
-    console.error("[download-cycle] archive error:", err);
-    passthrough.destroy(err);
-  });
+  for (const group of groupMap.values()) {
+    const ext = extractExt(group.document.file_name);
+    const typeNames = group.types
+      .map((t) => sanitize(t.abbreviation || t.name))
+      .filter(Boolean)
+      .sort();
+    const baseName = `${typeNames.join("+")}_${cycle.week_start}`;
+    const areaFolder = sanitize(group.area.name) || "Unnamed_Area";
 
-  // Build the zip in the background; the response streams as bytes
-  // become available. Any download or append error truncates the
-  // stream so the client sees a partial response rather than hanging.
-  const build = (async () => {
-    const usedNamesByFolder = new Map<string, Set<string>>();
-
-    for (const group of groupMap.values()) {
-      const ext = extractExt(group.document.file_name);
-      const typeNames = group.types
-        .map((t) => sanitize(t.abbreviation || t.name))
-        .filter(Boolean)
-        .sort();
-      const baseName = `${typeNames.join("+")}_${cycle.week_start}`;
-      const areaFolder = sanitize(group.area.name) || "Unnamed_Area";
-
-      let finalName = ext ? `${baseName}.${ext}` : baseName;
-      const used =
-        usedNamesByFolder.get(areaFolder) ?? new Set<string>();
-      let n = 0;
-      while (used.has(finalName)) {
-        n++;
-        finalName = ext ? `${baseName}_${n}.${ext}` : `${baseName}_${n}`;
-      }
-      used.add(finalName);
-      usedNamesByFolder.set(areaFolder, used);
-
-      const zipPath = `${areaFolder}/${finalName}`;
-
-      try {
-        const { data: blob, error: dlError } = await admin.storage
-          .from("inspection-documents")
-          .download(group.document.file_path);
-        if (dlError || !blob) {
-          console.error(
-            `[download-cycle] storage download failed for ${group.document.file_path}:`,
-            dlError,
-          );
-          continue;
-        }
-        const arrayBuffer = await blob.arrayBuffer();
-        archive.append(Buffer.from(arrayBuffer), { name: zipPath });
-      } catch (err) {
-        console.error(
-          `[download-cycle] error appending ${group.document.file_path}:`,
-          err,
-        );
-      }
+    let finalName = ext ? `${baseName}.${ext}` : baseName;
+    const used = usedNamesByFolder.get(areaFolder) ?? new Set<string>();
+    let n = 0;
+    while (used.has(finalName)) {
+      n++;
+      finalName = ext ? `${baseName}_${n}.${ext}` : `${baseName}_${n}`;
     }
+    used.add(finalName);
+    usedNamesByFolder.set(areaFolder, used);
 
-    await archive.finalize();
-  })();
+    const zipPath = `${areaFolder}/${finalName}`;
 
-  build.catch((err) => {
-    console.error("[download-cycle] build pipeline failed:", err);
-    archive.abort();
-    passthrough.destroy(err);
+    try {
+      const { data: blob, error: dlError } = await admin.storage
+        .from("inspection-documents")
+        .download(group.document.file_path);
+      if (dlError || !blob) {
+        console.error(
+          `[download-cycle] storage download failed for ${group.document.file_path}:`,
+          dlError,
+        );
+        continue;
+      }
+      const arrayBuffer = await blob.arrayBuffer();
+      zip.file(zipPath, Buffer.from(arrayBuffer));
+    } catch (err) {
+      console.error(
+        `[download-cycle] error appending ${group.document.file_path}:`,
+        err,
+      );
+    }
+  }
+
+  const zipBlob = await zip.generateAsync({
+    type: "blob",
+    compression: "DEFLATE",
+    compressionOptions: { level: 6 },
+    mimeType: "application/zip",
   });
 
   const zipFilename = `${sanitize(site.name)}_Week_${cycle.week_start}.zip`;
-  const webStream = Readable.toWeb(passthrough) as ReadableStream;
 
-  return new Response(webStream, {
+  return new Response(zipBlob, {
     headers: {
       "Content-Type": "application/zip",
       "Content-Disposition": `attachment; filename="${zipFilename}"`,
       "Cache-Control": "no-store",
+      "Content-Length": String(zipBlob.size),
     },
   });
 }

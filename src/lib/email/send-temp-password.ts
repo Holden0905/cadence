@@ -1,6 +1,6 @@
 import {
-  FROM_ADDRESS,
   appBaseUrl,
+  formatFromAddress,
   getResend,
 } from "@/lib/email/resend-client";
 
@@ -31,6 +31,7 @@ export async function sendTempPasswordEmail(args: {
   mode: TempPasswordMode;
   password: string;
   siteName?: string;
+  senderName?: string | null;
 }): Promise<SendTempPasswordResult> {
   const resend = getResend();
   const appUrl = appBaseUrl();
@@ -69,7 +70,7 @@ export async function sendTempPasswordEmail(args: {
   );
 
   const { data, error } = await resend.emails.send({
-    from: FROM_ADDRESS,
+    from: formatFromAddress(args.senderName),
     to: [args.email],
     subject,
     html,

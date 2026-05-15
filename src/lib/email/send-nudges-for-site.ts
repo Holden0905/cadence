@@ -1,8 +1,8 @@
 import { createAdminClient } from "@/utils/supabase/admin";
 import {
-  FROM_ADDRESS,
   RESEND_SEND_INTERVAL_MS,
   appBaseUrl,
+  formatFromAddress,
   formatWeekRange,
   getResend,
   sleep,
@@ -149,6 +149,7 @@ export async function sendNudgesForSite(
   const weekRange = formatWeekRange(cycle.week_start, cycle.week_end);
   const appUrl = appBaseUrl();
   const subject = `${opts.subjectPrefix ?? ""}Cadence — Outstanding Inspections at ${site.name} for Week of ${weekRange}`;
+  const fromAddress = formatFromAddress(site.email_sender_name);
   const results: { to: string; ok: boolean; error?: string }[] = [];
 
   for (const group of groups.values()) {
@@ -206,7 +207,7 @@ export async function sendNudgesForSite(
     if (args.results.length > 0) await sleep(RESEND_SEND_INTERVAL_MS);
     try {
       const { error } = await resend!.emails.send({
-        from: FROM_ADDRESS,
+        from: fromAddress,
         to: [args.to],
         subject: args.subject,
         html: args.html,

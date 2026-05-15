@@ -30,9 +30,16 @@ async function requireSuperAdminInline(): Promise<
   return { ok: true };
 }
 
+function normalizeSenderName(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed === "Cadence") return null;
+  return trimmed;
+}
+
 export async function createSiteAction(args: {
   name: string;
   location: string;
+  emailSenderName: string;
 }): Promise<SiteActionResult> {
   const guard = await requireSuperAdminInline();
   if ("error" in guard) return guard;
@@ -41,6 +48,7 @@ export async function createSiteAction(args: {
   const { error } = await admin.from("sites").insert({
     name: args.name.trim(),
     location: args.location.trim() || null,
+    email_sender_name: normalizeSenderName(args.emailSenderName),
   });
   if (error) return { error: error.message };
 
@@ -52,6 +60,7 @@ export async function updateSiteAction(args: {
   id: string;
   name: string;
   location: string;
+  emailSenderName: string;
 }): Promise<SiteActionResult> {
   const guard = await requireSuperAdminInline();
   if ("error" in guard) return guard;
@@ -62,6 +71,7 @@ export async function updateSiteAction(args: {
     .update({
       name: args.name.trim(),
       location: args.location.trim() || null,
+      email_sender_name: normalizeSenderName(args.emailSenderName),
       updated_at: new Date().toISOString(),
     })
     .eq("id", args.id);

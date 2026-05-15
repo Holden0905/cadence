@@ -9,8 +9,15 @@ export function getResend(): Resend | null {
   return _client;
 }
 
-export const FROM_ADDRESS =
-  process.env.CADENCE_FROM_ADDRESS ?? "Cadence <cadence@pesldar.com>";
+export const FROM_EMAIL = "cadence@pesldar.com";
+export const DEFAULT_SENDER_NAME = "Cadence";
+
+export function formatFromAddress(
+  senderName: string | null | undefined,
+): string {
+  const name = (senderName ?? "").trim() || DEFAULT_SENDER_NAME;
+  return `${name} <${FROM_EMAIL}>`;
+}
 
 export function formatWeekRange(start: string, end: string): string {
   const s = new Date(start + "T00:00:00");

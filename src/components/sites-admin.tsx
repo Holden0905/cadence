@@ -35,16 +35,24 @@ export function SitesAdmin({ sites }: { sites: Site[] }) {
   const router = useRouter();
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Site | null>(null);
-  const [draft, setDraft] = useState({ name: "", location: "" });
+  const [draft, setDraft] = useState({
+    name: "",
+    location: "",
+    emailSenderName: "",
+  });
   const [busy, setBusy] = useState(false);
 
   const openCreate = () => {
-    setDraft({ name: "", location: "" });
+    setDraft({ name: "", location: "", emailSenderName: "" });
     setCreating(true);
   };
 
   const openEdit = (site: Site) => {
-    setDraft({ name: site.name, location: site.location ?? "" });
+    setDraft({
+      name: site.name,
+      location: site.location ?? "",
+      emailSenderName: site.email_sender_name ?? "",
+    });
     setEditing(site);
   };
 
@@ -55,10 +63,12 @@ export function SitesAdmin({ sites }: { sites: Site[] }) {
           id: editing.id,
           name: draft.name,
           location: draft.location,
+          emailSenderName: draft.emailSenderName,
         })
       : await createSiteAction({
           name: draft.name,
           location: draft.location,
+          emailSenderName: draft.emailSenderName,
         });
     setBusy(false);
     if ("error" in result) {
@@ -173,6 +183,21 @@ export function SitesAdmin({ sites }: { sites: Site[] }) {
                 }
                 placeholder="Northfield, IL"
               />
+            </div>
+            <div>
+              <Label htmlFor="site_email_sender_name">Email Sender Name</Label>
+              <Input
+                id="site_email_sender_name"
+                value={draft.emailSenderName}
+                onChange={(e) =>
+                  setDraft({ ...draft, emailSenderName: e.target.value })
+                }
+                placeholder="Cadence"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Display name shown on outgoing emails (nudges, weekly
+                summary, invites). Leave blank to use &quot;Cadence&quot;.
+              </p>
             </div>
             {!editing && (
               <p className="text-xs text-muted-foreground">

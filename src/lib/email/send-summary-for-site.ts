@@ -1,8 +1,8 @@
 import { createAdminClient } from "@/utils/supabase/admin";
 import {
-  FROM_ADDRESS,
   RESEND_SEND_INTERVAL_MS,
   appBaseUrl,
+  formatFromAddress,
   formatWeekRange,
   getResend,
   sleep,
@@ -207,6 +207,7 @@ export async function sendSummaryForSite(
 
   const failures: { email: string; error: string }[] = [];
   let succeeded = 0;
+  const fromAddress = formatFromAddress(site.email_sender_name);
 
   for (let i = 0; i < recipients.length; i++) {
     const r = recipients[i];
@@ -214,7 +215,7 @@ export async function sendSummaryForSite(
     if (i > 0) await sleep(RESEND_SEND_INTERVAL_MS);
     try {
       const { error } = await resend.emails.send({
-        from: FROM_ADDRESS,
+        from: fromAddress,
         to: [r.email],
         subject,
         html,

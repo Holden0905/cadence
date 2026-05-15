@@ -42,28 +42,37 @@ export async function deleteDocumentAction(
 
   const admin = createAdminClient();
 
-  // Look up doc + its site via task → cycle
+  // Look up doc (basic fields). Site is resolved separately via the
+  // junction since documents.task_id is deprecated/nullable.
   const { data: doc, error: docError } = await admin
     .from("documents")
-    .select(
-      "id, file_path, uploaded_by, task_id, inspection_tasks!inner(cycle_id, inspection_cycles!inner(site_id))",
-    )
+    .select("id, file_path, uploaded_by")
     .eq("id", documentId)
     .maybeSingle<{
       id: string;
       file_path: string;
       uploaded_by: string;
-      task_id: string;
-      inspection_tasks: {
-        cycle_id: string;
-        inspection_cycles: { site_id: string };
-      };
     }>();
 
   if (docError) return { error: docError.message };
   if (!doc) return { error: "Document not found" };
 
-  const docSiteId = doc.inspection_tasks?.inspection_cycles?.site_id;
+  // Resolve the doc's site through any of its linked tasks. All linked
+  // tasks for a doc are in the same site per business rule, so taking
+  // the first match is sufficient for the permission check.
+  const { data: siteLink } = await admin
+    .from("document_tasks")
+    .select(
+      "inspection_tasks!inner(inspection_cycles!inner(site_id))",
+    )
+    .eq("document_id", documentId)
+    .limit(1)
+    .maybeSingle<{
+      inspection_tasks: { inspection_cycles: { site_id: string } };
+    }>();
+
+  const docSiteId =
+    siteLink?.inspection_tasks?.inspection_cycles?.site_id;
   if (!docSiteId) return { error: "Could not resolve document's site" };
 
   const isOwner = doc.uploaded_by === user.id;

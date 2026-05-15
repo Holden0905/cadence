@@ -12,14 +12,15 @@ import {
 import { ArrowLeft, History as HistoryIcon, CheckCircle2 } from "lucide-react";
 import { InspectionMatrix } from "@/components/inspection-matrix";
 import { CompletionReportButton } from "@/components/completion-report-button";
+import { DownloadCycleButton } from "@/components/download-cycle-button";
 import { formatWeekRange, daysRemaining } from "@/lib/dates";
 import { requireSiteContext } from "@/lib/admin-guard";
 import { isAdminRole } from "@/lib/site-context";
+import { fetchDocumentsForTasks } from "@/lib/queries";
 import type {
   Area,
   AreaRequirement,
   AreaRequirementOwner,
-  DocumentRow,
   InspectionCycle,
   InspectionTask,
   InspectionType,
@@ -78,15 +79,10 @@ export default async function HistoryDetailPage({
   ]);
 
   const taskList = (tasks ?? []) as InspectionTask[];
-  const taskIds = taskList.map((t) => t.id);
-  let documents: DocumentRow[] = [];
-  if (taskIds.length > 0) {
-    const { data: docs } = await supabase
-      .from("documents")
-      .select("*")
-      .in("task_id", taskIds);
-    documents = (docs ?? []) as DocumentRow[];
-  }
+  const { documents, documentTasks } = await fetchDocumentsForTasks(
+    supabase,
+    taskList.map((t) => t.id),
+  );
 
   const total = taskList.length;
   const approved = taskList.filter((t) => t.status === "approved").length;
@@ -96,6 +92,20 @@ export default async function HistoryDetailPage({
   const past = isPastWeek(cycle.week_end);
   const fullyApproved = total > 0 && pending === 0 && submitted === 0;
   const canSendCompletion = fullyApproved && isAdminRole(role);
+  const canDownloadDocs = isAdminRole(role);
+
+  // Count unique documents linked to approved tasks. Used to enable
+  // or disable the Download button.
+  const approvedTaskIdSet = new Set(
+    taskList.filter((t) => t.status === "approved").map((t) => t.id),
+  );
+  const approvedDocIdSet = new Set<string>();
+  for (const link of documentTasks) {
+    if (approvedTaskIdSet.has(link.task_id)) {
+      approvedDocIdSet.add(link.document_id);
+    }
+  }
+  const approvedDocCount = approvedDocIdSet.size;
 
   return (
     <div className="px-8 py-8 max-w-7xl">
@@ -135,7 +145,15 @@ export default async function HistoryDetailPage({
             </p>
           )}
         </div>
-        {canSendCompletion && <CompletionReportButton cycleId={cycle.id} />}
+        <div className="flex items-center gap-2 flex-wrap">
+          {canDownloadDocs && (
+            <DownloadCycleButton
+              cycleId={cycle.id}
+              approvedDocCount={approvedDocCount}
+            />
+          )}
+          {canSendCompletion && <CompletionReportButton cycleId={cycle.id} />}
+        </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
@@ -216,6 +234,7 @@ export default async function HistoryDetailPage({
         requirements={(requirements ?? []) as AreaRequirement[]}
         tasks={taskList}
         documents={documents}
+        documentTasks={documentTasks}
         owners={(owners ?? []) as AreaRequirementOwner[]}
         profiles={(profiles ?? []) as Profile[]}
         userRole={role}

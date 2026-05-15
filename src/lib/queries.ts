@@ -4,6 +4,7 @@ import type {
   AreaRequirement,
   AreaRequirementOwner,
   DocumentRow,
+  DocumentTask,
   InspectionCycle,
   InspectionTask,
   InspectionType,
@@ -22,6 +23,36 @@ export async function fetchActiveCycle(
     .limit(1)
     .maybeSingle<InspectionCycle>();
   return data;
+}
+
+/**
+ * Resolve all documents linked to the given task IDs via the
+ * document_tasks junction. Returns both arrays so callers can hand
+ * them to buildMatrix (or assemble their own maps).
+ */
+export async function fetchDocumentsForTasks(
+  supabase: SupabaseClient,
+  taskIds: string[],
+): Promise<{ documents: DocumentRow[]; documentTasks: DocumentTask[] }> {
+  if (taskIds.length === 0) return { documents: [], documentTasks: [] };
+
+  const { data: junction } = await supabase
+    .from("document_tasks")
+    .select("*")
+    .in("task_id", taskIds);
+  const documentTasks = (junction ?? []) as DocumentTask[];
+
+  const documentIds = Array.from(
+    new Set(documentTasks.map((j) => j.document_id)),
+  );
+  if (documentIds.length === 0) return { documents: [], documentTasks };
+
+  const { data: docs } = await supabase
+    .from("documents")
+    .select("*")
+    .in("id", documentIds);
+
+  return { documents: (docs ?? []) as DocumentRow[], documentTasks };
 }
 
 export async function fetchCycleMatrix(
@@ -52,22 +83,19 @@ export async function fetchCycleMatrix(
     supabase.from("profiles").select("*"),
   ]);
 
-  const taskIds = (tasks ?? []).map((t: InspectionTask) => t.id);
-  let documents: DocumentRow[] = [];
-  if (taskIds.length > 0) {
-    const { data: docs } = await supabase
-      .from("documents")
-      .select("*")
-      .in("task_id", taskIds);
-    documents = (docs ?? []) as DocumentRow[];
-  }
+  const taskList = (tasks ?? []) as InspectionTask[];
+  const { documents, documentTasks } = await fetchDocumentsForTasks(
+    supabase,
+    taskList.map((t) => t.id),
+  );
 
   return buildMatrix({
     areas: (areas ?? []) as Area[],
     inspectionTypes: (types ?? []) as InspectionType[],
     requirements: (requirements ?? []) as AreaRequirement[],
-    tasks: (tasks ?? []) as InspectionTask[],
+    tasks: taskList,
     documents,
+    documentTasks,
     owners: (owners ?? []) as AreaRequirementOwner[],
     profiles: (profiles ?? []) as Profile[],
   });

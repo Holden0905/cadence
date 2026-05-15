@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { createClient } from "@/utils/supabase/client";
@@ -13,17 +13,37 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Upload, X, FileText } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { Upload, X, FileText, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+
+export type PendingTaskOption = {
+  /** task id */
+  id: string;
+  /** inspection type display name (e.g. "VEO") */
+  typeName: string;
+  areaId: string;
+  areaName: string;
+  /** From areas.area_group. null means ungrouped. */
+  areaGroup: string | null;
+};
 
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   cycleId: string;
   taskId: string;
+  /** Area the user clicked into. Used to partition same-area vs
+   *  other-area tasks in the "Also applies to" picker. */
+  currentAreaId: string;
   areaName: string;
   inspectionTypeName: string;
+  /** Every pending task in the current cycle except the one being
+   *  uploaded. Partitioned into same-area (flat checkboxes) and
+   *  other-areas (collapsible). */
+  allPendingTasks?: PendingTaskOption[];
 };
 
 type StagedFile = {
@@ -36,12 +56,17 @@ export function UploadModal({
   onOpenChange,
   cycleId,
   taskId,
+  currentAreaId,
   areaName,
   inspectionTypeName,
+  allPendingTasks = [],
 }: Props) {
   const [files, setFiles] = useState<StagedFile[]>([]);
   const [uploading, setUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
+  const [extraTaskIds, setExtraTaskIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const dropRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
@@ -53,11 +78,86 @@ export function UploadModal({
           (f) => f.previewUrl && URL.revokeObjectURL(f.previewUrl),
         );
         setFiles([]);
+        setExtraTaskIds(new Set());
       }
       onOpenChange(nextOpen);
     },
     [files, onOpenChange],
   );
+
+  const toggleExtra = (id: string) => {
+    setExtraTaskIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  // Split allPendingTasks into "same area" (flat checkboxes above)
+  // and "other areas" (grouped, collapsible below). Insertion order
+  // from the parent is preserved within each bucket.
+  const partitioned = useMemo(() => {
+    type AreaBucket = {
+      areaId: string;
+      areaName: string;
+      areaGroup: string | null;
+      tasks: PendingTaskOption[];
+    };
+    type Group = {
+      label: string;
+      areas: AreaBucket[];
+    };
+
+    const sameArea: PendingTaskOption[] = [];
+    const otherByArea = new Map<string, AreaBucket>();
+
+    for (const t of allPendingTasks) {
+      if (t.areaId === currentAreaId) {
+        sameArea.push(t);
+        continue;
+      }
+      const bucket =
+        otherByArea.get(t.areaId) ??
+        ({
+          areaId: t.areaId,
+          areaName: t.areaName,
+          areaGroup: t.areaGroup,
+          tasks: [],
+        } as AreaBucket);
+      bucket.tasks.push(t);
+      otherByArea.set(t.areaId, bucket);
+    }
+
+    const namedGroupsMap = new Map<string, AreaBucket[]>();
+    const ungrouped: AreaBucket[] = [];
+    for (const bucket of otherByArea.values()) {
+      if (bucket.areaGroup === null) {
+        ungrouped.push(bucket);
+      } else {
+        const arr = namedGroupsMap.get(bucket.areaGroup) ?? [];
+        arr.push(bucket);
+        namedGroupsMap.set(bucket.areaGroup, arr);
+      }
+    }
+
+    const groups: Group[] = [];
+    for (const [label, areas] of namedGroupsMap) {
+      groups.push({ label, areas });
+    }
+    if (ungrouped.length === 1) {
+      // Single ungrouped area is promoted to a top-level entry — no
+      // "Other" wrapper. Its label is the area name.
+      groups.push({ label: ungrouped[0].areaName, areas: ungrouped });
+    } else if (ungrouped.length > 1) {
+      groups.push({ label: "Other", areas: ungrouped });
+    }
+
+    let totalOther = 0;
+    for (const bucket of otherByArea.values()) totalOther += bucket.tasks.length;
+
+    return { sameArea, groups, totalOther };
+  }, [allPendingTasks, currentAreaId]);
 
   const addFiles = (incoming: File[]) => {
     const staged = incoming.map<StagedFile>((file) => ({
@@ -129,6 +229,10 @@ export function UploadModal({
       return;
     }
 
+    // Original task is always included. Extras are the sibling pending
+    // tasks the user checked.
+    const allTaskIds = [taskId, ...Array.from(extraTaskIds)];
+
     try {
       for (const staged of files) {
         const safeName = staged.file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
@@ -142,20 +246,36 @@ export function UploadModal({
           });
         if (uploadErr) throw uploadErr;
 
-        const { error: insertErr } = await supabase.from("documents").insert({
-          task_id: taskId,
-          file_path: path,
-          file_name: staged.file.name,
-          file_type: staged.file.type,
-          file_size: staged.file.size,
-          uploaded_by: user.id,
-        });
+        // task_id intentionally omitted — the column is deprecated and
+        // the junction below is the source of truth.
+        const { data: docRow, error: insertErr } = await supabase
+          .from("documents")
+          .insert({
+            file_path: path,
+            file_name: staged.file.name,
+            file_type: staged.file.type,
+            file_size: staged.file.size,
+            uploaded_by: user.id,
+          })
+          .select("id")
+          .single();
         if (insertErr) throw insertErr;
+        if (!docRow) throw new Error("Document insert returned no row");
+
+        const { error: junctionErr } = await supabase
+          .from("document_tasks")
+          .insert(
+            allTaskIds.map((tid) => ({
+              document_id: docRow.id,
+              task_id: tid,
+            })),
+          );
+        if (junctionErr) throw junctionErr;
       }
 
-      // Only transition pending → submitted. If the task is already
-      // submitted or approved, don't overwrite submitted_by/at or
-      // approved_by/at — we're just adding more documents.
+      // Transition each linked task pending → submitted. Tasks that are
+      // already submitted or approved are skipped by the .eq filter so
+      // submitted_by/at and approved_by/at aren't overwritten.
       const { error: taskErr } = await supabase
         .from("inspection_tasks")
         .update({
@@ -163,17 +283,42 @@ export function UploadModal({
           submitted_by: user.id,
           submitted_at: new Date().toISOString(),
         })
-        .eq("id", taskId)
+        .in("id", allTaskIds)
         .eq("status", "pending");
       if (taskErr) throw taskErr;
 
+      const taskCount = allTaskIds.length;
+      const fileCount = files.length;
       toast.success(
-        `${files.length} document${files.length > 1 ? "s" : ""} submitted`,
+        taskCount > 1
+          ? `${fileCount} document${fileCount > 1 ? "s" : ""} submitted across ${taskCount} inspections`
+          : `${fileCount} document${fileCount > 1 ? "s" : ""} submitted`,
       );
       handleOpenChange(false);
       router.refresh();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Upload failed";
+      // Supabase returns PostgrestError objects that aren't Error
+      // instances, so plain `err.message` was being skipped before.
+      // Log the full shape and surface whatever message/code we can.
+      console.error("[upload-modal] submit failed:", err);
+      let msg = "Upload failed";
+      if (err && typeof err === "object") {
+        const e = err as {
+          message?: string;
+          code?: string;
+          details?: string;
+          hint?: string;
+        };
+        const parts = [
+          e.message,
+          e.code ? `(code ${e.code})` : null,
+          e.details,
+          e.hint,
+        ].filter(Boolean);
+        if (parts.length) msg = parts.join(" — ");
+      } else if (typeof err === "string") {
+        msg = err;
+      }
       toast.error(msg);
     } finally {
       setUploading(false);
@@ -234,6 +379,114 @@ export function UploadModal({
             }}
           />
         </div>
+
+        {(partitioned.sameArea.length > 0 ||
+          partitioned.totalOther > 0) && (
+          <div className="rounded-md border bg-muted/30 p-3">
+            <p className="text-sm font-medium mb-1">
+              Also applies to{" "}
+              <span className="text-xs font-normal text-muted-foreground">
+                (this upload will mark each checked inspection submitted)
+              </span>
+            </p>
+            {partitioned.sameArea.length > 0 && (
+              <div className="flex flex-col gap-1.5 mt-2">
+                {partitioned.sameArea.map((sib) => {
+                  const checkboxId = `extra-task-${sib.id}`;
+                  return (
+                    <div key={sib.id} className="flex items-center gap-2">
+                      <Checkbox
+                        id={checkboxId}
+                        checked={extraTaskIds.has(sib.id)}
+                        onCheckedChange={() => toggleExtra(sib.id)}
+                        disabled={uploading}
+                      />
+                      <Label
+                        htmlFor={checkboxId}
+                        className="cursor-pointer font-normal"
+                      >
+                        {sib.typeName}
+                      </Label>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {partitioned.totalOther > 0 && (
+              <details
+                className={cn(
+                  "group mt-3 rounded border bg-background/40",
+                  partitioned.sameArea.length === 0 && "mt-1",
+                )}
+              >
+                <summary className="flex items-center gap-1.5 cursor-pointer list-none px-2.5 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition select-none">
+                  <ChevronRight className="size-4 transition-transform group-open:rotate-90" />
+                  Other areas ({partitioned.totalOther} pending task
+                  {partitioned.totalOther === 1 ? "" : "s"})
+                </summary>
+                <div className="flex flex-col gap-1 px-2 pb-2">
+                  {partitioned.groups.map((group) => {
+                    const groupTotal = group.areas.reduce(
+                      (sum, a) => sum + a.tasks.length,
+                      0,
+                    );
+                    const singleArea = group.areas.length === 1;
+                    return (
+                      <details
+                        key={group.label}
+                        className="group/group rounded bg-background"
+                      >
+                        <summary className="flex items-center gap-1.5 cursor-pointer list-none px-2 py-1.5 text-sm font-medium hover:bg-muted/40 rounded transition select-none">
+                          <ChevronRight className="size-3.5 transition-transform group-open/group:rotate-90" />
+                          {group.label} ({groupTotal} pending task
+                          {groupTotal === 1 ? "" : "s"})
+                        </summary>
+                        <div className="pl-5 pr-2 pb-1.5 flex flex-col gap-1">
+                          {group.areas.map((area) => (
+                            <div key={area.areaId}>
+                              {!singleArea && (
+                                <p className="text-xs font-medium text-muted-foreground mt-1.5 mb-0.5">
+                                  {area.areaName}
+                                </p>
+                              )}
+                              <div className="flex flex-col gap-1 pl-1">
+                                {area.tasks.map((t) => {
+                                  const checkboxId = `extra-task-${t.id}`;
+                                  return (
+                                    <div
+                                      key={t.id}
+                                      className="flex items-center gap-2"
+                                    >
+                                      <Checkbox
+                                        id={checkboxId}
+                                        checked={extraTaskIds.has(t.id)}
+                                        onCheckedChange={() =>
+                                          toggleExtra(t.id)
+                                        }
+                                        disabled={uploading}
+                                      />
+                                      <Label
+                                        htmlFor={checkboxId}
+                                        className="cursor-pointer font-normal"
+                                      >
+                                        {t.typeName}
+                                      </Label>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    );
+                  })}
+                </div>
+              </details>
+            )}
+          </div>
+        )}
 
         {files.length > 0 && (
           <div className="grid grid-cols-3 gap-2 max-h-60 overflow-y-auto">

@@ -3,6 +3,7 @@ import type {
   AreaRequirement,
   AreaRequirementOwner,
   DocumentRow,
+  DocumentTask,
   InspectionTask,
   InspectionType,
   Profile,
@@ -33,6 +34,7 @@ export function buildMatrix(args: {
   requirements: AreaRequirement[];
   tasks: InspectionTask[];
   documents: DocumentRow[];
+  documentTasks: DocumentTask[];
   owners: AreaRequirementOwner[];
   profiles: Profile[];
 }): MatrixData {
@@ -42,17 +44,21 @@ export function buildMatrix(args: {
     requirements,
     tasks,
     documents,
+    documentTasks,
     owners,
     profiles,
   } = args;
 
   const profileById = new Map(profiles.map((p) => [p.id, p]));
   const reqById = new Map(requirements.map((r) => [r.id, r]));
+  const docById = new Map(documents.map((d) => [d.id, d]));
   const docsByTask = new Map<string, DocumentRow[]>();
-  for (const d of documents) {
-    const arr = docsByTask.get(d.task_id) ?? [];
-    arr.push(d);
-    docsByTask.set(d.task_id, arr);
+  for (const link of documentTasks) {
+    const doc = docById.get(link.document_id);
+    if (!doc) continue;
+    const arr = docsByTask.get(link.task_id) ?? [];
+    arr.push(doc);
+    docsByTask.set(link.task_id, arr);
   }
   const ownersByReq = new Map<
     string,

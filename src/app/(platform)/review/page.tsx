@@ -1,6 +1,7 @@
 import { createClient } from "@/utils/supabase/server";
 import { ReviewList } from "@/components/review-list";
 import { requireSiteAdmin } from "@/lib/admin-guard";
+import { fetchDocumentsForTasks } from "@/lib/queries";
 import type {
   Area,
   AreaRequirement,
@@ -62,7 +63,7 @@ export default async function ReviewPage() {
   );
   const taskIds = taskList.map((t) => t.id);
 
-  const [reqRes, areaRes, typeRes, profileRes, docRes] = await Promise.all([
+  const [reqRes, areaRes, typeRes, profileRes, docResult] = await Promise.all([
     requirementIds.length
       ? supabase
           .from("area_requirements")
@@ -74,26 +75,27 @@ export default async function ReviewPage() {
     submitterIds.length
       ? supabase.from("profiles").select("*").in("id", submitterIds)
       : Promise.resolve({ data: [] as Profile[] }),
-    taskIds.length
-      ? supabase.from("documents").select("*").in("task_id", taskIds)
-      : Promise.resolve({ data: [] as DocumentRow[] }),
+    fetchDocumentsForTasks(supabase, taskIds),
   ]);
 
   const requirements = (reqRes.data ?? []) as AreaRequirement[];
   const areas = (areaRes.data ?? []) as Area[];
   const types = (typeRes.data ?? []) as InspectionType[];
   const submitters = (profileRes.data ?? []) as Profile[];
-  const documents = (docRes.data ?? []) as DocumentRow[];
+  const { documents, documentTasks } = docResult;
 
   const reqById = new Map(requirements.map((r) => [r.id, r]));
   const areaById = new Map(areas.map((a) => [a.id, a]));
   const typeById = new Map(types.map((t) => [t.id, t]));
   const submitterById = new Map(submitters.map((p) => [p.id, p]));
+  const docById = new Map(documents.map((d) => [d.id, d]));
   const docsByTask = new Map<string, DocumentRow[]>();
-  for (const d of documents) {
-    const arr = docsByTask.get(d.task_id) ?? [];
-    arr.push(d);
-    docsByTask.set(d.task_id, arr);
+  for (const link of documentTasks) {
+    const doc = docById.get(link.document_id);
+    if (!doc) continue;
+    const arr = docsByTask.get(link.task_id) ?? [];
+    arr.push(doc);
+    docsByTask.set(link.task_id, arr);
   }
 
   const items = taskList

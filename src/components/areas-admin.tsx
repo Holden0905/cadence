@@ -43,21 +43,34 @@ export function AreasAdmin({
   const router = useRouter();
   const [editing, setEditing] = useState<Area | null>(null);
   const [creating, setCreating] = useState(false);
-  const [draft, setDraft] = useState<{ name: string; sort_order: number }>({
+  const [draft, setDraft] = useState<{
+    name: string;
+    sort_order: number;
+    area_group: string;
+  }>({
     name: "",
     sort_order: suggestNextSortOrder(areas),
+    area_group: "",
   });
   const [busy, setBusy] = useState(false);
 
   const supabase = createClient();
 
   const openCreate = () => {
-    setDraft({ name: "", sort_order: suggestNextSortOrder(areas) });
+    setDraft({
+      name: "",
+      sort_order: suggestNextSortOrder(areas),
+      area_group: "",
+    });
     setCreating(true);
   };
 
   const openEdit = (a: Area) => {
-    setDraft({ name: a.name, sort_order: a.sort_order });
+    setDraft({
+      name: a.name,
+      sort_order: a.sort_order,
+      area_group: a.area_group ?? "",
+    });
     setEditing(a);
   };
 
@@ -83,12 +96,14 @@ export function AreasAdmin({
       return;
     }
     setBusy(true);
+    const normalizedGroup = draft.area_group.trim() || null;
     if (editing) {
       const { error } = await supabase
         .from("areas")
         .update({
           name: draft.name.trim(),
           sort_order: draft.sort_order,
+          area_group: normalizedGroup,
           updated_at: new Date().toISOString(),
         })
         .eq("id", editing.id);
@@ -101,6 +116,7 @@ export function AreasAdmin({
       const { error } = await supabase.from("areas").insert({
         name: draft.name.trim(),
         sort_order: draft.sort_order,
+        area_group: normalizedGroup,
         site_id: siteId,
       });
       if (error) toast.error(error.message);
@@ -242,6 +258,21 @@ export function AreasAdmin({
               />
               <p className="text-xs text-muted-foreground mt-1">
                 Positive integer, unique within this site.
+              </p>
+            </div>
+            <div>
+              <Label htmlFor="area_group">Area group</Label>
+              <Input
+                id="area_group"
+                value={draft.area_group}
+                onChange={(e) =>
+                  setDraft({ ...draft, area_group: e.target.value })
+                }
+                placeholder="Area 2"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Optional. Groups areas in the upload modal&apos;s
+                cross-area picker. Leave blank for ungrouped.
               </p>
             </div>
           </div>

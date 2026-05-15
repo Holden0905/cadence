@@ -8,11 +8,11 @@ import { AboutDialogTrigger } from "@/components/about-dialog-trigger";
 import { formatWeekRange, daysRemaining } from "@/lib/dates";
 import { requireSiteContext } from "@/lib/admin-guard";
 import { isSuperAdminRole } from "@/lib/site-context";
+import { fetchDocumentsForTasks } from "@/lib/queries";
 import type {
   Area,
   AreaRequirement,
   AreaRequirementOwner,
-  DocumentRow,
   InspectionCycle,
   InspectionTask,
   InspectionType,
@@ -73,15 +73,10 @@ export default async function DashboardPage() {
   ]);
 
   const taskList = (tasks ?? []) as InspectionTask[];
-  const taskIds = taskList.map((t) => t.id);
-  let documents: DocumentRow[] = [];
-  if (taskIds.length > 0) {
-    const { data: docs } = await supabase
-      .from("documents")
-      .select("*")
-      .in("task_id", taskIds);
-    documents = (docs ?? []) as DocumentRow[];
-  }
+  const { documents, documentTasks } = await fetchDocumentsForTasks(
+    supabase,
+    taskList.map((t) => t.id),
+  );
 
   const total = taskList.length;
   const approved = taskList.filter((t) => t.status === "approved").length;
@@ -215,6 +210,7 @@ export default async function DashboardPage() {
         requirements={(requirements ?? []) as AreaRequirement[]}
         tasks={taskList}
         documents={documents}
+        documentTasks={documentTasks}
         owners={(owners ?? []) as AreaRequirementOwner[]}
         profiles={(profiles ?? []) as Profile[]}
         userRole={role}

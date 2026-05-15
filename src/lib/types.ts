@@ -33,6 +33,7 @@ export type Area = {
   id: string;
   site_id: string;
   name: string;
+  area_group: string | null;
   sort_order: number;
   is_active: boolean;
   created_at: string;
@@ -97,12 +98,21 @@ export type InspectionTask = {
 
 export type DocumentRow = {
   id: string;
-  task_id: string;
+  /** Deprecated: kept for legacy reads only. New code links documents
+   *  to tasks via the document_tasks junction table. */
+  task_id: string | null;
   file_path: string;
   file_name: string;
   file_type: string | null;
   file_size: number | null;
   uploaded_by: string;
+  created_at: string;
+};
+
+export type DocumentTask = {
+  id: string;
+  document_id: string;
+  task_id: string;
   created_at: string;
 };
 

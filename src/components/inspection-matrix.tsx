@@ -2,7 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { Check, Clock, X, Minus } from "lucide-react";
-import { UploadModal } from "@/components/upload-modal";
+import {
+  UploadModal,
+  type PendingTaskOption,
+} from "@/components/upload-modal";
 import { DocumentPreviewModal } from "@/components/document-preview-modal";
 import { cn } from "@/lib/utils";
 import { buildMatrix, getCell, statusLabel } from "@/lib/matrix";
@@ -11,6 +14,7 @@ import type {
   AreaRequirement,
   AreaRequirementOwner,
   DocumentRow,
+  DocumentTask,
   InspectionTask,
   InspectionType,
   Profile,
@@ -25,6 +29,7 @@ type Props = {
   requirements: AreaRequirement[];
   tasks: InspectionTask[];
   documents: DocumentRow[];
+  documentTasks: DocumentTask[];
   owners: AreaRequirementOwner[];
   profiles: Profile[];
   userRole: SiteRole;
@@ -40,6 +45,7 @@ export function InspectionMatrix({
   requirements,
   tasks,
   documents,
+  documentTasks,
   owners,
   profiles,
   userRole,
@@ -53,20 +59,33 @@ export function InspectionMatrix({
         requirements,
         tasks,
         documents,
+        documentTasks,
         owners,
         profiles,
       }),
-    [areas, inspectionTypes, requirements, tasks, documents, owners, profiles],
+    [
+      areas,
+      inspectionTypes,
+      requirements,
+      tasks,
+      documents,
+      documentTasks,
+      owners,
+      profiles,
+    ],
   );
 
   const [uploadCell, setUploadCell] = useState<{
     taskId: string;
+    areaId: string;
     areaName: string;
     typeName: string;
+    allPendingTasks: PendingTaskOption[];
   } | null>(null);
 
   const [previewCell, setPreviewCell] = useState<{
     taskId: string;
+    areaId: string;
     status: TaskStatus;
     documents: DocumentRow[];
     areaName: string;
@@ -112,14 +131,39 @@ export function InspectionMatrix({
       // Viewers, unassigned inspectors, and inspectors on a non-owned
       // area can't upload — just no-op on the click.
       if (!canUploadForArea(areaId)) return;
+
+      // Every pending task in the cycle (excluding the clicked task)
+      // becomes a candidate for the "Also applies to" picker. The
+      // modal partitions into same-area (flat) vs other-areas
+      // (collapsible groups).
+      const allPending: PendingTaskOption[] = [];
+      for (const otherArea of areas) {
+        for (const otherType of inspectionTypes) {
+          const otherCell = getCell(matrix, otherArea.id, otherType.id);
+          if (otherCell.kind !== "task") continue;
+          if (otherCell.task.status !== "pending") continue;
+          if (otherCell.task.id === cell.task.id) continue;
+          allPending.push({
+            id: otherCell.task.id,
+            typeName: otherType.name,
+            areaId: otherArea.id,
+            areaName: otherArea.name,
+            areaGroup: otherArea.area_group,
+          });
+        }
+      }
+
       setUploadCell({
         taskId: cell.task.id,
+        areaId,
         areaName: area.name,
         typeName: type.name,
+        allPendingTasks: allPending,
       });
     } else {
       setPreviewCell({
         taskId: cell.task.id,
+        areaId,
         status: cell.task.status,
         documents: cell.documents,
         areaName: area.name,
@@ -132,10 +176,14 @@ export function InspectionMatrix({
 
   const handleAddMoreFromPreview = () => {
     if (!previewCell) return;
+    // When adding more from the preview, never spread to siblings —
+    // this flow is "attach additional docs to this specific task."
     setUploadCell({
       taskId: previewCell.taskId,
+      areaId: previewCell.areaId,
       areaName: previewCell.areaName,
       typeName: previewCell.typeName,
+      allPendingTasks: [],
     });
     setPreviewCell(null);
   };
@@ -240,8 +288,10 @@ export function InspectionMatrix({
           onOpenChange={(open) => !open && setUploadCell(null)}
           cycleId={cycleId}
           taskId={uploadCell.taskId}
+          currentAreaId={uploadCell.areaId}
           areaName={uploadCell.areaName}
           inspectionTypeName={uploadCell.typeName}
+          allPendingTasks={uploadCell.allPendingTasks}
         />
       )}
 

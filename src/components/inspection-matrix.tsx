@@ -304,7 +304,7 @@ export function InspectionMatrix({
           inspectionTypeName={previewCell.typeName}
           taskStatusLabel={previewCell.statusLabel}
           onAddMore={previewAllowsAdd ? handleAddMoreFromPreview : undefined}
-          canDelete={!isViewer}
+          canDelete={previewCell.canUpload}
         />
       )}
     </>

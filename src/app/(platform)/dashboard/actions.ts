@@ -111,8 +111,41 @@ export async function deleteDocumentAction(
   }
 
   if (!canDelete) {
+    // Primary or backup owner on the area_requirement of any task
+    // linked to this document. Lets inspectors clean up their own
+    // assignments' uploads without admin involvement.
+    const { data: linkedTasks } = await admin
+      .from("document_tasks")
+      .select("inspection_tasks!inner(area_requirement_id)")
+      .eq("document_id", documentId)
+      .returns<
+        { inspection_tasks: { area_requirement_id: string } }[]
+      >();
+
+    const reqIds = Array.from(
+      new Set(
+        (linkedTasks ?? [])
+          .map((l) => l.inspection_tasks?.area_requirement_id)
+          .filter((v): v is string => Boolean(v)),
+      ),
+    );
+
+    if (reqIds.length > 0) {
+      const { data: ownership } = await admin
+        .from("area_requirement_owners")
+        .select("id")
+        .in("area_requirement_id", reqIds)
+        .eq("profile_id", user.id)
+        .in("owner_role", ["primary", "backup"])
+        .limit(1)
+        .maybeSingle();
+      if (ownership) canDelete = true;
+    }
+  }
+
+  if (!canDelete) {
     return {
-      error: "You can only delete documents you uploaded",
+      error: "You don't have permission to delete this document",
     };
   }
 

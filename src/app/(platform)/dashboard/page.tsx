@@ -22,7 +22,7 @@ import type {
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  const { siteId, role } = await requireSiteContext();
+  const { user, siteId, role } = await requireSiteContext();
   const supabase = await createClient();
   const isSuper = isSuperAdminRole(role);
 
@@ -88,6 +88,26 @@ export default async function DashboardPage() {
   const submitted = taskList.filter((t) => t.status === "submitted").length;
   const pending = taskList.filter((t) => t.status === "pending").length;
   const completePct = total === 0 ? 0 : Math.round((approved / total) * 100);
+
+  // Areas where the current user is either the primary or backup owner
+  // of at least one requirement. Used by the matrix to surface an
+  // inspector's assignments above non-assigned areas.
+  const ownedRequirementIds = new Set(
+    ((owners ?? []) as AreaRequirementOwner[])
+      .filter(
+        (o) =>
+          o.profile_id === user.id &&
+          (o.owner_role === "primary" || o.owner_role === "backup"),
+      )
+      .map((o) => o.area_requirement_id),
+  );
+  const ownedAreaIds = Array.from(
+    new Set(
+      ((requirements ?? []) as AreaRequirement[])
+        .filter((r) => ownedRequirementIds.has(r.id))
+        .map((r) => r.area_id),
+    ),
+  );
 
   return (
     <div className="px-8 py-8 max-w-7xl">
@@ -198,6 +218,7 @@ export default async function DashboardPage() {
         owners={(owners ?? []) as AreaRequirementOwner[]}
         profiles={(profiles ?? []) as Profile[]}
         userRole={role}
+        ownedAreaIds={ownedAreaIds}
       />
     </div>
   );

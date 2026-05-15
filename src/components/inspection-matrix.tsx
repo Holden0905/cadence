@@ -28,6 +28,9 @@ type Props = {
   owners: AreaRequirementOwner[];
   profiles: Profile[];
   userRole: SiteRole;
+  /** Area IDs the current user is assigned to (primary or backup on any
+   *  requirement). Used to partition the matrix for inspectors. */
+  ownedAreaIds?: string[];
 };
 
 export function InspectionMatrix({
@@ -40,6 +43,7 @@ export function InspectionMatrix({
   owners,
   profiles,
   userRole,
+  ownedAreaIds = [],
 }: Props) {
   const matrix = useMemo(
     () =>
@@ -68,10 +72,34 @@ export function InspectionMatrix({
     areaName: string;
     typeName: string;
     statusLabel: string;
+    canUpload: boolean;
   } | null>(null);
 
   const isAdmin = userRole === "site_admin" || userRole === "super_admin";
   const isViewer = userRole === "viewer";
+  const isInspector = userRole === "inspector";
+
+  const ownedAreaSet = useMemo(
+    () => new Set(ownedAreaIds),
+    [ownedAreaIds],
+  );
+  const inspectorWithAssignments =
+    isInspector && ownedAreaIds.length > 0;
+  const inspectorReadOnly = isInspector && ownedAreaIds.length === 0;
+
+  const myAreas = inspectorWithAssignments
+    ? areas.filter((a) => ownedAreaSet.has(a.id))
+    : areas;
+  const otherAreas = inspectorWithAssignments
+    ? areas.filter((a) => !ownedAreaSet.has(a.id))
+    : [];
+
+  const canUploadForArea = (areaId: string): boolean => {
+    if (isViewer) return false;
+    if (inspectorReadOnly) return false;
+    if (inspectorWithAssignments) return ownedAreaSet.has(areaId);
+    return true;
+  };
 
   const handleCellClick = (areaId: string, typeId: string) => {
     const cell = getCell(matrix, areaId, typeId);
@@ -81,8 +109,9 @@ export function InspectionMatrix({
     if (!area || !type) return;
 
     if (cell.task.status === "pending") {
-      // Viewers can see the matrix but never upload.
-      if (isViewer) return;
+      // Viewers, unassigned inspectors, and inspectors on a non-owned
+      // area can't upload — just no-op on the click.
+      if (!canUploadForArea(areaId)) return;
       setUploadCell({
         taskId: cell.task.id,
         areaName: area.name,
@@ -96,6 +125,7 @@ export function InspectionMatrix({
         areaName: area.name,
         typeName: type.name,
         statusLabel: statusLabel(cell.task.status),
+        canUpload: canUploadForArea(areaId),
       });
     }
   };
@@ -110,17 +140,57 @@ export function InspectionMatrix({
     setPreviewCell(null);
   };
 
-  // Submitted tasks: any writer can add more.
+  // Submitted tasks: any writer for this area can add more.
   // Approved tasks: only admins can add more (late corrections).
-  // Viewers can never add.
+  // Viewers + inspectors on non-owned areas can never add — surfaced
+  // via the canUpload flag captured at click time.
   const previewAllowsAdd =
-    !isViewer &&
     previewCell &&
+    previewCell.canUpload &&
     (previewCell.status === "submitted" ||
       (previewCell.status === "approved" && isAdmin));
 
+  const renderAreaRow = (a: Area, opts: { interactive: boolean }) => (
+    <tr
+      key={a.id}
+      className={cn(
+        "hover:bg-muted/30 transition",
+        !opts.interactive && "opacity-60",
+      )}
+    >
+      <td
+        className={cn(
+          "px-4 py-2 border-b font-medium sticky left-0 bg-card hover:bg-muted/30 transition",
+          !opts.interactive && "text-muted-foreground",
+        )}
+      >
+        {a.name}
+      </td>
+      {inspectionTypes.map((t) => {
+        const cell = getCell(matrix, a.id, t.id);
+        return (
+          <td key={t.id} className="px-2 py-1 border-b text-center">
+            <CellButton
+              cell={cell}
+              interactive={opts.interactive}
+              onClick={() => handleCellClick(a.id, t.id)}
+            />
+          </td>
+        );
+      })}
+    </tr>
+  );
+
   return (
     <>
+      {inspectorReadOnly && (
+        <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
+          No inspections assigned to you this week. The matrix below is
+          read-only — contact your site administrator if you should be
+          assigned to an area.
+        </div>
+      )}
+
       <div className="overflow-x-auto rounded-lg border bg-card">
         <table className="w-full text-sm">
           <thead className="bg-muted/50">
@@ -140,27 +210,26 @@ export function InspectionMatrix({
             </tr>
           </thead>
           <tbody>
-            {areas.map((a) => (
-              <tr key={a.id} className="hover:bg-muted/30 transition">
-                <td className="px-4 py-2 border-b font-medium sticky left-0 bg-card hover:bg-muted/30 transition">
-                  {a.name}
-                </td>
-                {inspectionTypes.map((t) => {
-                  const cell = getCell(matrix, a.id, t.id);
-                  return (
-                    <td
-                      key={t.id}
-                      className="px-2 py-1 border-b text-center"
-                    >
-                      <CellButton
-                        cell={cell}
-                        onClick={() => handleCellClick(a.id, t.id)}
-                      />
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
+            {myAreas.map((a) =>
+              renderAreaRow(a, {
+                interactive: !inspectorReadOnly && !isViewer,
+              }),
+            )}
+            {inspectorWithAssignments && otherAreas.length > 0 && (
+              <>
+                <tr>
+                  <td
+                    colSpan={inspectionTypes.length + 1}
+                    className="sticky left-0 bg-muted/40 px-4 py-2 border-b border-t text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+                  >
+                    Other Areas — read-only
+                  </td>
+                </tr>
+                {otherAreas.map((a) =>
+                  renderAreaRow(a, { interactive: false }),
+                )}
+              </>
+            )}
           </tbody>
         </table>
       </div>
@@ -195,9 +264,11 @@ export function InspectionMatrix({
 function CellButton({
   cell,
   onClick,
+  interactive = true,
 }: {
   cell: ReturnType<typeof getCell>;
   onClick: () => void;
+  interactive?: boolean;
 }) {
   if (cell.kind === "na") {
     return (
@@ -208,7 +279,7 @@ function CellButton({
   }
 
   const status = cell.task.status;
-  const styles = {
+  const interactiveStyles = {
     pending:
       "bg-red-50 text-red-700 hover:bg-red-100 dark:bg-red-950/40 dark:text-red-400 dark:hover:bg-red-950/60",
     submitted:
@@ -216,21 +287,33 @@ function CellButton({
     approved:
       "bg-green-50 text-green-700 hover:bg-green-100 dark:bg-green-950/40 dark:text-green-400 dark:hover:bg-green-950/60",
   } as const;
+  const staticStyles = {
+    pending:
+      "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-400",
+    submitted:
+      "bg-yellow-50 text-yellow-800 dark:bg-yellow-950/40 dark:text-yellow-400",
+    approved:
+      "bg-green-50 text-green-700 dark:bg-green-950/40 dark:text-green-400",
+  } as const;
 
   const Icon =
     status === "approved" ? Check : status === "submitted" ? Clock : X;
+
+  const titleText = interactive
+    ? `${statusLabel(status)} (click to ${status === "pending" ? "upload" : "view"})`
+    : statusLabel(status);
 
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
-        "inline-flex items-center justify-center w-full h-9 rounded transition cursor-pointer",
-        styles[status],
+        "inline-flex items-center justify-center w-full h-9 rounded transition",
+        interactive
+          ? `cursor-pointer ${interactiveStyles[status]}`
+          : `cursor-default ${staticStyles[status]}`,
       )}
-      title={`${statusLabel(status)} (click to ${
-        status === "pending" ? "upload" : "view"
-      })`}
+      title={titleText}
     >
       <Icon className="size-4" />
     </button>

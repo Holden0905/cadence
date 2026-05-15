@@ -1,3 +1,5 @@
+⚠️ HISTORICAL — This was the original build spec. For current project guidance, see CLAUDE.md in the project root.
+
 # Cadence — Architecture Specification
 
 ## Overview

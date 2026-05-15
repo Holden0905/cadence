@@ -1,9 +1,56 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { requireSiteAdmin } from "@/lib/admin-guard";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { sendSummaryForSite } from "@/lib/email/send-summary-for-site";
-import type { InspectionCycle, InspectionTask, Site } from "@/lib/types";
+import type {
+  CycleStatus,
+  InspectionCycle,
+  InspectionTask,
+  Site,
+} from "@/lib/types";
+
+export type UpdateCycleStatusResult = { ok: true } | { error: string };
+
+export async function updateCycleStatusAction(args: {
+  cycleId: string;
+  status: CycleStatus;
+}): Promise<UpdateCycleStatusResult> {
+  const { siteId } = await requireSiteAdmin();
+  const admin = createAdminClient();
+
+  const { data: cycle } = await admin
+    .from("inspection_cycles")
+    .select("id, site_id")
+    .eq("id", args.cycleId)
+    .maybeSingle<{ id: string; site_id: string }>();
+  if (!cycle) return { error: "Cycle not found" };
+  if (cycle.site_id !== siteId)
+    return { error: "Cycle belongs to a different site" };
+
+  const patch: {
+    status: CycleStatus;
+    completed_at?: string;
+  } = { status: args.status };
+  // Stamp completion time only when transitioning into 'completed'.
+  // Other transitions don't clear it — preserves the audit trail if
+  // the cycle is later moved to archived.
+  if (args.status === "completed") {
+    patch.completed_at = new Date().toISOString();
+  }
+
+  const { error } = await admin
+    .from("inspection_cycles")
+    .update(patch)
+    .eq("id", args.cycleId);
+  if (error) return { error: error.message };
+
+  revalidatePath(`/history/${args.cycleId}`);
+  revalidatePath("/history");
+  revalidatePath("/dashboard");
+  return { ok: true };
+}
 
 export type CompletionReportResult =
   | {

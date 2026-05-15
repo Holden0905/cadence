@@ -13,6 +13,7 @@ import { ArrowLeft, History as HistoryIcon, CheckCircle2 } from "lucide-react";
 import { InspectionMatrix } from "@/components/inspection-matrix";
 import { CompletionReportButton } from "@/components/completion-report-button";
 import { DownloadCycleButton } from "@/components/download-cycle-button";
+import { CycleStatusControl } from "@/components/cycle-status-control";
 import { formatWeekRange, daysRemaining } from "@/lib/dates";
 import { requireSiteContext } from "@/lib/admin-guard";
 import { isAdminRole } from "@/lib/site-context";
@@ -135,6 +136,12 @@ export default async function HistoryDetailPage({
                 <CheckCircle2 className="size-3" />
                 100% approved
               </Badge>
+            )}
+            {canDownloadDocs && (
+              <CycleStatusControl
+                cycleId={cycle.id}
+                currentStatus={cycle.status}
+              />
             )}
           </div>
           {past && (

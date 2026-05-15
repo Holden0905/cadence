@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import {
@@ -21,12 +21,24 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Card } from "@/components/ui/card";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Label } from "@/components/ui/label";
 import { isPositiveInteger } from "@/lib/validation";
 import type { Area } from "@/lib/types";
+
+// Sentinel values for the area-group Select. Radix Select rejects
+// the empty string as a value, so we use distinguishable strings.
+const GROUP_NONE = "__none__";
+const GROUP_NEW = "__new__";
 
 function suggestNextSortOrder(areas: Area[]): number {
   if (areas.length === 0) return 1;
@@ -46,21 +58,40 @@ export function AreasAdmin({
   const [draft, setDraft] = useState<{
     name: string;
     sort_order: number;
-    area_group: string;
+    groupMode: "none" | "existing" | "new";
+    existingGroup: string;
+    newGroupName: string;
   }>({
     name: "",
     sort_order: suggestNextSortOrder(areas),
-    area_group: "",
+    groupMode: "none",
+    existingGroup: "",
+    newGroupName: "",
   });
   const [busy, setBusy] = useState(false);
 
   const supabase = createClient();
 
+  // Distinct existing group names from the currently-loaded areas,
+  // plus the area being edited's original group (if any). The latter
+  // guarantees a user can switch back to their starting value even
+  // when this area is the sole one holding that group.
+  const existingGroups = useMemo(() => {
+    const set = new Set<string>();
+    for (const a of areas) {
+      if (a.area_group) set.add(a.area_group);
+    }
+    if (editing?.area_group) set.add(editing.area_group);
+    return Array.from(set).sort((x, y) => x.localeCompare(y));
+  }, [areas, editing]);
+
   const openCreate = () => {
     setDraft({
       name: "",
       sort_order: suggestNextSortOrder(areas),
-      area_group: "",
+      groupMode: "none",
+      existingGroup: "",
+      newGroupName: "",
     });
     setCreating(true);
   };
@@ -69,10 +100,43 @@ export function AreasAdmin({
     setDraft({
       name: a.name,
       sort_order: a.sort_order,
-      area_group: a.area_group ?? "",
+      groupMode: a.area_group ? "existing" : "none",
+      existingGroup: a.area_group ?? "",
+      newGroupName: "",
     });
     setEditing(a);
   };
+
+  const handleGroupSelectChange = (value: string) => {
+    if (value === GROUP_NONE) {
+      setDraft((d) => ({
+        ...d,
+        groupMode: "none",
+        existingGroup: "",
+        newGroupName: "",
+      }));
+    } else if (value === GROUP_NEW) {
+      setDraft((d) => ({
+        ...d,
+        groupMode: "new",
+        existingGroup: "",
+      }));
+    } else {
+      setDraft((d) => ({
+        ...d,
+        groupMode: "existing",
+        existingGroup: value,
+        newGroupName: "",
+      }));
+    }
+  };
+
+  const groupSelectValue =
+    draft.groupMode === "none"
+      ? GROUP_NONE
+      : draft.groupMode === "new"
+        ? GROUP_NEW
+        : draft.existingGroup;
 
   const validateDraft = (): string | null => {
     const name = draft.name.trim();
@@ -96,7 +160,12 @@ export function AreasAdmin({
       return;
     }
     setBusy(true);
-    const normalizedGroup = draft.area_group.trim() || null;
+    const normalizedGroup =
+      draft.groupMode === "none"
+        ? null
+        : draft.groupMode === "new"
+          ? draft.newGroupName.trim() || null
+          : draft.existingGroup || null;
     if (editing) {
       const { error } = await supabase
         .from("areas")
@@ -262,17 +331,41 @@ export function AreasAdmin({
             </div>
             <div>
               <Label htmlFor="area_group">Area group</Label>
-              <Input
-                id="area_group"
-                value={draft.area_group}
-                onChange={(e) =>
-                  setDraft({ ...draft, area_group: e.target.value })
-                }
-                placeholder="Area 2"
-              />
+              <Select
+                value={groupSelectValue}
+                onValueChange={handleGroupSelectChange}
+              >
+                <SelectTrigger id="area_group" className="w-full">
+                  <SelectValue placeholder="Select a group..." />
+                </SelectTrigger>
+                <SelectContent position="popper">
+                  <SelectItem value={GROUP_NONE}>
+                    None (ungrouped)
+                  </SelectItem>
+                  {existingGroups.map((g) => (
+                    <SelectItem key={g} value={g}>
+                      {g}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value={GROUP_NEW}>
+                    + Add new group...
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              {draft.groupMode === "new" && (
+                <Input
+                  className="mt-2"
+                  value={draft.newGroupName}
+                  onChange={(e) =>
+                    setDraft({ ...draft, newGroupName: e.target.value })
+                  }
+                  placeholder="New group name"
+                  autoFocus
+                />
+              )}
               <p className="text-xs text-muted-foreground mt-1">
-                Optional. Groups areas in the upload modal&apos;s
-                cross-area picker. Leave blank for ungrouped.
+                Groups areas in the upload modal&apos;s cross-area
+                picker.
               </p>
             </div>
           </div>
